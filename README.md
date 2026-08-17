@@ -103,6 +103,9 @@ data/manifests/                 versioned dataset provenance and schemas
 experiments/                    versioned model, protocol, and metric definitions
 src/mark_ad_benchmark/
 ├── cli.py                      command parsing and dispatch
+├── thresholds/
+│   ├── base.py                  threshold-selector contract
+│   └── best_f1.py               validation-F1 threshold selector
 ├── experiment.py               manifest-driven experiment orchestration
 ├── logging.py                  pluggable logger and outputs
 ├── datasets/
@@ -120,7 +123,7 @@ src/mark_ad_benchmark/
 tests/                          unit tests
 ```
 
-`main.py` contains no application logic. The package CLI dispatches commands to dataset workflows and experiment execution. Training artifacts persist fitted models, validation scores, calibrated thresholds, and provenance. Test artifacts restore a saved model, score only the test split, and report final metrics. Models own anomaly-score calculations; protocols prepare data; metrics owns threshold selection and point metrics.
+`main.py` contains no application logic. The package CLI dispatches commands to dataset workflows and experiment execution. Training artifacts persist fitted models, validation scores, calibrated thresholds, and provenance. Test artifacts restore a saved model, score only the test split, and report final metrics. Models own anomaly-score calculations; protocols prepare data; threshold selectors convert scores to predictions; metrics owns point metrics.
 
 ## Development Rules
 

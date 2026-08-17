@@ -25,9 +25,9 @@ class TrackingModel(AnomalyModel):
     def fit(self, features: Sequence[Sequence[float]]) -> None:
         self.fit_features = features
 
-    def score(self, features: Sequence[Sequence[float]]) -> Sequence[float]:
+    def score(self, features: Sequence[Sequence[float]]) -> tuple[float, ...]:
         self.scored_features.append(features)
-        return [row[0] for row in features]
+        return tuple(row[0] for row in features)
 
     def save(self, path: Path) -> None:
         pass

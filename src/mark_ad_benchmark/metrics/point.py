@@ -28,22 +28,6 @@ def point_metrics(
     return metrics
 
 
-def select_f1_threshold(
-    labels: Sequence[int], scores: Sequence[float], logger: ComponentLogger
-) -> float:
-    """Select the highest validation-score threshold with maximal point F1."""
-    validate_inputs(labels, scores, logger)
-    threshold = max(
-        {*scores, math.inf},
-        key=lambda candidate: (
-            calculate_point_metrics(labels, scores, candidate).f1,
-            candidate,
-        ),
-    )
-    logger.info(f"Selected validation F1 threshold: {threshold}")
-    return threshold
-
-
 def validate_inputs(
     labels: Sequence[int], scores: Sequence[float], logger: ComponentLogger
 ) -> None:

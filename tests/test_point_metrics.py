@@ -1,7 +1,8 @@
 import pytest
 
 from mark_ad_benchmark.logging import Logger
-from mark_ad_benchmark.metrics import point_metrics, select_f1_threshold
+from mark_ad_benchmark.metrics import point_metrics
+from mark_ad_benchmark.thresholds import BestF1ThresholdSelector
 
 
 def test_validation_f1_threshold_applies_to_point_metrics() -> None:
@@ -9,7 +10,7 @@ def test_validation_f1_threshold_applies_to_point_metrics() -> None:
     scores = (0.1, 0.8, 0.6, 0.4)
     logger = Logger().for_component("mark_ad_benchmark.metrics.point")
 
-    threshold = select_f1_threshold(labels, scores, logger)
+    threshold = BestF1ThresholdSelector(logger).fit(scores, labels)
     metrics = point_metrics(labels, scores, threshold, logger)
 
     assert threshold == 0.6

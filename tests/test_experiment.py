@@ -49,9 +49,11 @@ def test_pca_training_and_testing_use_separate_artifacts(
             {
                 "id": "example-pca-inductive",
                 "dataset": "example",
-                "model": {"name": "pca", "n_components": 1},
+                "model": {"name": "pca", "parameters": {"n_components": 1}},
                 "protocol": "inductive",
                 "training": {"epochs": 1},
+                "threshold": {"name": "validation_f1"},
+                "selection": {"metric": "f1", "direction": "maximize"},
             }
         )
     )
@@ -113,9 +115,14 @@ def test_experiment_rejects_unknown_model_or_protocol_before_loading_data(
             {
                 "id": "invalid",
                 "dataset": "missing",
-                "model": {"name": model_name, "n_components": 1},
+                "model": {
+                    "name": model_name,
+                    "parameters": {"n_components": 1},
+                },
                 "protocol": protocol_name,
                 "training": {"epochs": 1},
+                "threshold": {"name": "validation_f1"},
+                "selection": {"metric": "f1", "direction": "maximize"},
             }
         )
     )

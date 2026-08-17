@@ -46,7 +46,7 @@ class InductiveProtocol(Protocol):
     def score_validation(self, model: AnomalyModel) -> tuple[float, ...]:
         """Score validation features without fitting the model."""
         self.logger.info("Scoring validation split")
-        return tuple(model.score(self.validation.features))
+        return model.score(self.validation.features)
 
     @classmethod
     def score_test(
@@ -54,7 +54,7 @@ class InductiveProtocol(Protocol):
     ) -> tuple[float, ...]:
         """Score test features without fitting the supplied model."""
         logger.info("Scoring test split")
-        return tuple(model.score(test.features))
+        return model.score(test.features)
 
     def validate_feature_widths(self) -> None:
         """Ensure every split contains nonempty rows of one feature width."""

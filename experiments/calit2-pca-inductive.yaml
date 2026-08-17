@@ -2,12 +2,17 @@ id: calit2-pca-inductive
 dataset: calit2
 model:
   name: pca
-  n_components: 1
+  parameters:
+    n_components: 1
 protocol: inductive
 training:
   epochs: 1
+threshold:
+  name: validation_f1
+selection:
+  metric: f1
+  direction: maximize
 metrics:
-  threshold: validation_f1
   point:
     - precision
     - recall

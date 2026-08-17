@@ -9,7 +9,7 @@ import yaml
 
 from mark_ad_benchmark.datasets.loader import DatasetSplit, load_refined_dataset
 from mark_ad_benchmark.logging import ComponentLogger
-from mark_ad_benchmark.metrics import PointMetrics, point_metrics, select_f1_threshold
+from mark_ad_benchmark.metrics import PointMetrics, point_metrics
 
 
 @dataclass(frozen=True)
@@ -17,6 +17,7 @@ class ValidationResult:
     epoch: int
     threshold: float
     metrics: PointMetrics
+    selection_value: float
     scores: tuple[float, ...]
 
 
@@ -64,6 +65,12 @@ class Experiment:
         self.model_type, self.model_module = resolve_available_component(
             config_root / "models.yaml", definition["model"]["name"], "model", logger
         )
+        self.threshold_type, self.threshold_module = resolve_available_component(
+            config_root / "thresholds.yaml",
+            definition["threshold"]["name"],
+            "threshold selector",
+            logger,
+        )
 
     @classmethod
     def from_path(
@@ -75,27 +82,38 @@ class Experiment:
     def train(self, run_id: str | None = None) -> ValidatedRun:
         """Train and validate every epoch, then persist the selected model."""
         manifest_path, dataset_manifest = self.load_dataset_manifest()
+
+        # 1. load refined dataset splits
         splits = load_refined_dataset(
             manifest_path,
             self.refined_root,
             self.logger.for_component("mark_ad_benchmark.datasets.loader"),
             self.protocol_type.training_required_splits,
         )
+
+        # 2. instantiate protocol from data splits
         protocol = self.protocol_type.from_splits(
             splits, self.logger.for_component(self.protocol_module)
         )
+
+        # 3. instantiate model
         model = self.model_type(
-            self.definition["model"]["n_components"],
+            self.definition["model"]["parameters"],
             self.logger.for_component(self.model_module),
         )
+
+        # 4. run set up
         validated_run_id = run_id or create_run_id(f"{self.definition['id']}-validated")
         self.runs_root.mkdir(parents=True, exist_ok=True)
         checkpoint_path = self.runs_root / f".{validated_run_id}.checkpoint"
         best_validation: ValidationResult | None = None
         history: list[dict[str, object]] = []
 
+        # 5. training loop
         for epoch in range(1, self.definition["training"]["epochs"] + 1):
             self.logger.info(f"Training epoch {epoch}")
+
+            # 5.1 fit model on training data
             protocol.fit(model)
             validation = self.validate(model, protocol, epoch)
             history.append(
@@ -103,11 +121,11 @@ class Experiment:
                     "epoch": epoch,
                     "threshold": validation.threshold,
                     "metrics": asdict(validation.metrics),
+                    "selection_value": validation.selection_value,
                 }
             )
-            if (
-                best_validation is None
-                or validation.metrics.f1 > best_validation.metrics.f1
+            if best_validation is None or self.is_better(
+                validation.selection_value, best_validation.selection_value
             ):
                 model.save(checkpoint_path)
                 best_validation = validation
@@ -134,6 +152,8 @@ class Experiment:
                 {
                     "selected_epoch": best_validation.epoch,
                     "threshold": best_validation.threshold,
+                    "selection": self.definition["selection"],
+                    "selection_value": best_validation.selection_value,
                     "validation": asdict(best_validation.metrics),
                 },
                 indent=2,
@@ -155,27 +175,36 @@ class Experiment:
                     "module": self.protocol_module,
                     "class": self.protocol_type.__name__,
                 },
+                "threshold_selector": self.component_identity(
+                    self.threshold_module, self.threshold_type
+                ),
                 "selected_epoch": best_validation.epoch,
-                "threshold": best_validation.threshold,
+                "selected_threshold": best_validation.threshold,
+                "selection": self.definition["selection"],
+                "selection_value": best_validation.selection_value,
             },
         )
         self.logger.info(
-            f"Completed training: validation_f1={best_validation.metrics.f1}, run_dir={run_dir}"
+            f"Completed training: {self.definition['selection']['metric']}={best_validation.selection_value}, run_dir={run_dir}"
         )
         return ValidatedRun(run_dir, best_validation)
 
     def validate(self, model: object, protocol: object, epoch: int) -> ValidationResult:
         """Calibrate a trained model on validation data without fitting it."""
+
+        # .1. score model on validation split
         scores = protocol.score_validation(model)
         metrics_logger = self.logger.for_component("mark_ad_benchmark.metrics.point")
-        threshold = select_f1_threshold(
-            protocol.validation.labels, scores, metrics_logger
-        )
+        selector = self.threshold_type(self.logger.for_component(self.threshold_module))
+        threshold = selector.fit(scores, protocol.validation.labels)
         metrics = point_metrics(
             protocol.validation.labels, scores, threshold, metrics_logger
         )
-        self.logger.info(f"Validated epoch {epoch}: f1={metrics.f1}")
-        return ValidationResult(epoch, threshold, metrics, scores)
+        selection_value = getattr(metrics, self.definition["selection"]["metric"])
+        self.logger.info(
+            f"Validated epoch {epoch}: {self.definition['selection']['metric']}={selection_value}"
+        )
+        return ValidationResult(epoch, threshold, metrics, selection_value, scores)
 
     def test(self, validated_run_id: str, run_id: str | None = None) -> TestResult:
         """Evaluate a validated artifact on test data without fitting it."""
@@ -204,6 +233,12 @@ class Experiment:
             )
             self.logger.error(message)
             raise ValueError(message)
+        if validated_manifest["threshold_selector"] != self.component_identity(
+            self.threshold_module, self.threshold_type
+        ):
+            message = "Validated artifact threshold selector does not match the available catalog"
+            self.logger.error(message)
+            raise ValueError(message)
 
         dataset_path, dataset_manifest = self.load_dataset_manifest()
         if validated_manifest["dataset_manifest"] != dataset_manifest:
@@ -223,7 +258,7 @@ class Experiment:
         scores = self.protocol_type.score_test(
             model, test_split, self.logger.for_component(self.protocol_module)
         )
-        threshold = validated_manifest["threshold"]
+        threshold = validated_manifest["selected_threshold"]
         metrics = point_metrics(
             test_split.labels,
             scores,
@@ -276,6 +311,32 @@ class Experiment:
             message = "Experiment training.epochs must be at least one"
             self.logger.error(message)
             raise ValueError(message)
+        threshold = self.definition.get("threshold")
+        if not isinstance(threshold, dict) or not isinstance(
+            threshold.get("name"), str
+        ):
+            message = "Experiment threshold.name must be a string"
+            self.logger.error(message)
+            raise TypeError(message)
+        selection = self.definition.get("selection")
+        if not isinstance(selection, dict):
+            message = "Experiment selection must be a mapping"
+            self.logger.error(message)
+            raise TypeError(message)
+        if selection.get("metric") not in PointMetrics.__dataclass_fields__:
+            message = "Experiment selection.metric must be a point metric"
+            self.logger.error(message)
+            raise ValueError(message)
+        if selection.get("direction") not in {"maximize", "minimize"}:
+            message = "Experiment selection.direction must be maximize or minimize"
+            self.logger.error(message)
+            raise ValueError(message)
+
+    def is_better(self, candidate: float, current: float) -> bool:
+        """Compare validation values using the configured selection direction."""
+        if self.definition["selection"]["direction"] == "maximize":
+            return candidate > current
+        return candidate < current
 
     def load_dataset_manifest(self) -> tuple[Path, dict[str, object]]:
         """Load the dataset manifest referenced by this experiment."""
