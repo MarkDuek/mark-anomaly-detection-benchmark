@@ -1,0 +1,30 @@
+id: calit2
+source:
+  type: huggingface
+  repository: PLAN-Lab/mTSBench
+  revision: 9ea52adfa86373576f446a7f3f26395e506f1b8b
+files:
+  train: CalIt2/CalIt2_traffic_train.csv
+  validation: CalIt2/CalIt2_traffic_val.csv
+  test: CalIt2/CalIt2_traffic_test.csv
+raw_schema:
+  timestamp: timestamp
+  features:
+  - in_count
+  - out_count
+  label: is_anomaly
+refined_schema:
+  timestamp: timestamp
+  features:
+  - feature_0
+  - feature_1
+  label: label
+checksums:
+  raw:
+    train: c6594e95fb7da2a4057d287bf6a98919bd0489fa7e8b423d87139be61c3dfa26
+    validation: 6c7fc07652c7ba19879d3f93cc7c16452ab47ddb5021338334b5408b5f9b31da
+    test: 5a625b8c7a6b6629f09ddca3161358b67f5331329fc86674d724ba8b9127c1ca
+  refined:
+    train: b137922c8740e284a5f4aa071ab0e8543f6daace71504999c5fb942107eb9668
+    validation: a4d83ab066b4086354cf4983671911e6eb58e6e1bb8d0f3369cf0f25e6813ec1
+    test: 3bd18723bc6f947a42299a9b1cf0f7a306973b85fe7fb691b2a6e39c91bb5493

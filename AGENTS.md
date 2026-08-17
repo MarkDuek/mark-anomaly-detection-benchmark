@@ -25,6 +25,7 @@
 - Run `make format` and `make lint` before marking any coding task as complete.
 - Execute all Python tasks via the Makefile to ensure commands run under the correct `uv run` abstraction.
 - Run deterministic data validations (e.g., shape check, null checks) before passing data to models.
+- Add each new module to `config/logging.yaml` with its intended logging level. Before committing, set every module's configured level to `info`.
 
 ### Never Do
 - Do not use global `pip` or standard `python` execution lines; always use the Makefile wrappers.

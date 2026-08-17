@@ -1,0 +1,17 @@
+[project]
+name = "mark-anomaly-detection-benchmark"
+version = "0.1.0"
+requires-python = ">=3.11,<3.12"
+dependencies = [
+    "huggingface-hub>=1.27.0",
+    "pyyaml>=6.0.3",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=9.1.1",
+    "ruff>=0.16.3",
+]
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
