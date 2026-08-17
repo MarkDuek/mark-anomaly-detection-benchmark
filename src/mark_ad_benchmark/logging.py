@@ -52,6 +52,10 @@ class ComponentLogger:
     def log(self, level: LogLevel, message: str) -> None:
         self.logger.log(level, message, component=self.name)
 
+    def for_component(self, name: str) -> "ComponentLogger":
+        """Return another named component logger sharing the same configuration."""
+        return self.logger.for_component(name)
+
 
 class Logger:
     def __init__(

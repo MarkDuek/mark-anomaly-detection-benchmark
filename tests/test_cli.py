@@ -37,3 +37,22 @@ def test_cli_rejects_missing_dataset_manifest(
         "[ERROR] Dataset manifest not found: data/manifests/missing.yaml"
         in capsys.readouterr().out
     )
+
+
+def test_cli_dispatches_training_and_testing(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    calls: list[tuple[object, ...]] = []
+    monkeypatch.setattr(
+        "mark_ad_benchmark.cli.train_experiment", lambda *args: calls.append(args)
+    )
+    monkeypatch.setattr(
+        "mark_ad_benchmark.cli.test_experiment", lambda *args: calls.append(args)
+    )
+
+    cli.main(["train", "calit2-pca-inductive"])
+    cli.main(["test", "calit2-pca-inductive", "training-run"])
+
+    assert calls[0][0] == Path("experiments/calit2-pca-inductive.yaml")
+    assert calls[1][0] == Path("experiments/calit2-pca-inductive.yaml")
+    assert calls[1][1] == "training-run"

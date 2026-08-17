@@ -1,5 +1,8 @@
 from abc import ABC, abstractmethod
 from collections.abc import Sequence
+from pathlib import Path
+
+from mark_ad_benchmark.logging import ComponentLogger
 
 
 class AnomalyModel(ABC):
@@ -12,3 +15,12 @@ class AnomalyModel(ABC):
     @abstractmethod
     def score(self, features: Sequence[Sequence[float]]) -> Sequence[float]:
         """Return one higher-is-more-anomalous score per feature row."""
+
+    @abstractmethod
+    def save(self, path: Path) -> None:
+        """Persist a fitted model for later scoring."""
+
+    @classmethod
+    @abstractmethod
+    def load(cls, path: Path, logger: ComponentLogger) -> "AnomalyModel":
+        """Restore a fitted model using the current process logger."""

@@ -16,7 +16,10 @@ class DatasetSplit:
 
 
 def load_refined_dataset(
-    manifest_path: Path, refined_root: Path, logger: ComponentLogger
+    manifest_path: Path,
+    refined_root: Path,
+    logger: ComponentLogger,
+    requested_splits: tuple[str, ...] | None = None,
 ) -> dict[str, DatasetSplit]:
     manifest = yaml.safe_load(manifest_path.read_text())
     schema = manifest["refined_schema"]
@@ -25,7 +28,13 @@ def load_refined_dataset(
     datasets = {}
     logger.info(f"Loading refined dataset: {manifest['id']}")
 
-    for split in manifest["files"]:
+    requested_splits = requested_splits or tuple(manifest["files"])
+    missing_splits = set(requested_splits) - manifest["files"].keys()
+    if missing_splits:
+        message = f"Dataset manifest is missing splits: {sorted(missing_splits)}"
+        logger.error(message)
+        raise ValueError(message)
+    for split in requested_splits:
         path = dataset_dir / f"{split}.csv"
         if sha256(path) != checksums[split]:
             message = f"Checksum mismatch for {path}"

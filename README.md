@@ -23,6 +23,12 @@ This installs `uv` if necessary and synchronizes the locked Python 3.11 project 
 
 ## Usage
 
+List available workflows:
+
+```sh
+make help
+```
+
 Prepare one dataset from its manifest:
 
 ```sh
@@ -41,6 +47,24 @@ Individual stages are also available:
 make ingest DATASET=calit2
 make refine DATASET=calit2
 make ingest-all
+```
+
+Train and calibrate the first PCA experiment without loading test data:
+
+```sh
+make train EXPERIMENT=calit2-pca-inductive
+```
+
+Test a saved training run without fitting the model again:
+
+```sh
+make evaluate EXPERIMENT=calit2-pca-inductive TRAINING_RUN=<training-run-id>
+```
+
+Run both phases as a convenience workflow:
+
+```sh
+make run EXPERIMENT=calit2-pca-inductive
 ```
 
 Run quality checks:
@@ -76,22 +100,27 @@ Raw and refined files are local artifacts and are not committed to Git. The mani
 main.py                         executable CLI shim
 config/logging.yaml             project-wide logging-level policy
 data/manifests/                 versioned dataset provenance and schemas
+experiments/                    versioned model, protocol, and metric definitions
 src/mark_ad_benchmark/
 ├── cli.py                      command parsing and dispatch
+├── experiment.py               manifest-driven experiment orchestration
 ├── logging.py                  pluggable logger and outputs
 ├── datasets/
 │   ├── ingest.py               source download and raw validation
 │   ├── loader.py               refined split loading and validation
 │   └── refine.py               raw-to-refined conversion
 ├── protocols/
-│   ├── base.py                  Protocol run contract
-│   └── inductive.py             train-only fit and held-out split scoring
+│   ├── base.py                  Protocol training contract
+│   └── inductive.py             train-only fit, validation, and test scoring
+├── metrics/
+│   └── point.py                 thresholded precision, recall, and F1
 └── models/
-    └── base.py                 AnomalyModel fit/score contract
+    ├── base.py                 AnomalyModel fit/score/persistence contract
+    └── pca.py                  mean-centered reconstruction-residual PCA
 tests/                          unit tests
 ```
 
-`main.py` contains no application logic. The package CLI dispatches commands to dataset workflows and, later, experiment execution. Models own anomaly-score calculations; protocols prepare data; evaluation owns metric and threshold policy.
+`main.py` contains no application logic. The package CLI dispatches commands to dataset workflows and experiment execution. Training artifacts persist fitted models, validation scores, calibrated thresholds, and provenance. Test artifacts restore a saved model, score only the test split, and report final metrics. Models own anomaly-score calculations; protocols prepare data; metrics owns threshold selection and point metrics.
 
 ## Development Rules
 

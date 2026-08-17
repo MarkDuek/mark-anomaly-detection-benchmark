@@ -4,6 +4,9 @@ component_levels:
   mark_ad_benchmark.datasets.ingest: info
   mark_ad_benchmark.datasets.loader: info
   mark_ad_benchmark.datasets.refine: info
+  mark_ad_benchmark.experiment: info
   mark_ad_benchmark.models.base: info
+  mark_ad_benchmark.models.pca: info
+  mark_ad_benchmark.metrics.point: info
   mark_ad_benchmark.protocols.base: info
   mark_ad_benchmark.protocols.inductive: info

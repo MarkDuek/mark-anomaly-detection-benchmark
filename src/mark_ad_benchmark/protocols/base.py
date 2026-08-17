@@ -7,5 +7,5 @@ class Protocol(ABC):
     """Benchmark execution contract for a defined fitting and scoring policy."""
 
     @abstractmethod
-    def run(self, model: AnomalyModel) -> dict[str, tuple[float, ...]]:
-        """Fit and score a model according to this protocol's data-access rules."""
+    def fit_and_score_validation(self, model: AnomalyModel) -> tuple[float, ...]:
+        """Fit a model and score validation data according to protocol policy."""

@@ -1,5 +1,6 @@
 from collections.abc import Mapping
 from dataclasses import dataclass
+from typing import ClassVar
 
 from mark_ad_benchmark.datasets.loader import DatasetSplit
 from mark_ad_benchmark.logging import ComponentLogger
@@ -13,16 +14,16 @@ class InductiveProtocol(Protocol):
 
     train: DatasetSplit
     validation: DatasetSplit
-    test: DatasetSplit
     logger: ComponentLogger
+    training_required_splits: ClassVar[tuple[str, ...]] = ("train", "validation")
+    test_required_splits: ClassVar[tuple[str, ...]] = ("test",)
 
     @classmethod
     def from_splits(
         cls, splits: Mapping[str, DatasetSplit], logger: ComponentLogger
     ) -> "InductiveProtocol":
-        """Create a validated protocol from train, validation, and test splits."""
-        required_splits = {"train", "validation", "test"}
-        missing_splits = required_splits - splits.keys()
+        """Create a validated protocol from train and validation splits."""
+        missing_splits = set(cls.training_required_splits) - splits.keys()
         if missing_splits:
             message = f"Missing required splits: {sorted(missing_splits)}"
             logger.error(message)
@@ -31,29 +32,30 @@ class InductiveProtocol(Protocol):
         protocol = cls(
             train=splits["train"],
             validation=splits["validation"],
-            test=splits["test"],
             logger=logger,
         )
         protocol.validate_feature_widths()
-        logger.info("Prepared inductive train, validation, and test splits")
+        logger.info("Prepared inductive train and validation splits")
         return protocol
 
-    def run(self, model: AnomalyModel) -> dict[str, tuple[float, ...]]:
-        """Fit on train features and return scores for held-out splits."""
+    def fit_and_score_validation(self, model: AnomalyModel) -> tuple[float, ...]:
+        """Fit on train features and score validation features."""
         self.logger.info("Fitting model on train split")
         model.fit(self.train.features)
-        scores = {}
-        for split_name, split in {
-            "validation": self.validation,
-            "test": self.test,
-        }.items():
-            self.logger.info(f"Scoring {split_name} split")
-            scores[split_name] = tuple(model.score(split.features))
-        return scores
+        self.logger.info("Scoring validation split")
+        return tuple(model.score(self.validation.features))
+
+    @classmethod
+    def score_test(
+        cls, model: AnomalyModel, test: DatasetSplit, logger: ComponentLogger
+    ) -> tuple[float, ...]:
+        """Score test features without fitting the supplied model."""
+        logger.info("Scoring test split")
+        return tuple(model.score(test.features))
 
     def validate_feature_widths(self) -> None:
         """Ensure every split contains nonempty rows of one feature width."""
-        splits = (self.train, self.validation, self.test)
+        splits = (self.train, self.validation)
         if any(not split.features for split in splits):
             message = "Inductive splits must contain feature rows"
             self.logger.error(message)
