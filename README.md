@@ -9,6 +9,10 @@
 
 A reproducible, manifest-driven benchmark for multivariate time-series anomaly detection. It ingests source data locally, refines it into a common schema, and provides the foundations for comparable model scoring and evaluation.
 
+## Reference Benchmarks
+
+This repository uses [mTSBench](https://github.com/PLAN-Lab/mTSBench) and [TSB-AD](https://github.com/TheDatumOrg/TSB-AD) as reference benchmarks for datasets, evaluation patterns, and comparative review. They are not runtime dependencies or implementation authorities; this benchmark owns its manifests, protocols, scoring, and evaluation semantics.
+
 ## Setup
 
 ```sh
