@@ -4,6 +4,8 @@ model:
   name: pca
   n_components: 1
 protocol: inductive
+training:
+  epochs: 1
 metrics:
   threshold: validation_f1
   point:

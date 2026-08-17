@@ -49,16 +49,16 @@ make refine DATASET=calit2
 make ingest-all
 ```
 
-Train and calibrate the first PCA experiment without loading test data:
+Train and validate each configured epoch without loading test data:
 
 ```sh
 make train EXPERIMENT=calit2-pca-inductive
 ```
 
-Test a saved training run without fitting the model again:
+Test a saved validated run without fitting the model again:
 
 ```sh
-make evaluate EXPERIMENT=calit2-pca-inductive TRAINING_RUN=<training-run-id>
+make evaluate EXPERIMENT=calit2-pca-inductive VALIDATED_RUN=<validated-run-id>
 ```
 
 Run both phases as a convenience workflow:

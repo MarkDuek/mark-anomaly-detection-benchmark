@@ -29,7 +29,8 @@ def test_pca_scores_reconstruction_residuals_through_inductive_protocol() -> Non
     )
     model = PCAModel(1, logger.for_component("mark_ad_benchmark.models.pca"))
 
-    validation_scores = protocol.fit_and_score_validation(model)
+    protocol.fit(model)
+    validation_scores = protocol.score_validation(model)
     test_scores = InductiveProtocol.score_test(
         model, split(((2.0, 2.0), (0.0, 2.0))), protocol.logger
     )

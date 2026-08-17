@@ -3,11 +3,7 @@ from pathlib import Path
 
 from mark_ad_benchmark.datasets.ingest import ingest_dataset
 from mark_ad_benchmark.datasets.refine import refine_dataset
-from mark_ad_benchmark.experiment import (
-    run_experiment,
-    test_experiment,
-    train_experiment,
-)
+from mark_ad_benchmark.experiment import Experiment
 from mark_ad_benchmark.logging import ConsoleOutput, Logger
 
 
@@ -20,7 +16,7 @@ def main(argv: list[str] | None = None) -> None:
         subparsers.add_parser(command).add_argument("experiment_id")
     test_parser = subparsers.add_parser("test")
     test_parser.add_argument("experiment_id")
-    test_parser.add_argument("training_run_id")
+    test_parser.add_argument("validated_run_id")
     args = parser.parse_args(argv)
     logger = Logger.from_config(Path("config/logging.yaml"), ConsoleOutput())
     component_logger = logger.for_component(__name__)
@@ -30,18 +26,19 @@ def main(argv: list[str] | None = None) -> None:
             message = f"Experiment definition not found: {experiment_path}"
             component_logger.error(message)
             raise FileNotFoundError(message)
-        experiment_logger = component_logger.for_component(
-            "mark_ad_benchmark.experiment"
+        experiment = Experiment.from_path(
+            experiment_path,
+            component_logger.for_component("mark_ad_benchmark.experiment"),
         )
         if args.command == "train":
             component_logger.info(f"Training experiment: {args.experiment_id}")
-            train_experiment(experiment_path, experiment_logger)
+            experiment.train()
         elif args.command == "test":
             component_logger.info(f"Testing experiment: {args.experiment_id}")
-            test_experiment(experiment_path, args.training_run_id, experiment_logger)
+            experiment.test(args.validated_run_id)
         else:
             component_logger.info(f"Running experiment: {args.experiment_id}")
-            run_experiment(experiment_path, experiment_logger)
+            experiment.run()
         return
 
     manifest_path = Path("data/manifests") / f"{args.dataset_id}.yaml"

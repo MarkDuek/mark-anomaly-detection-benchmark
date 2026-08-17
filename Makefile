@@ -13,7 +13,7 @@ help:
 		'  make lint                       Lint Python code with Ruff.' \
 		'  make test                       Run the test suite.' \
 		'  make train EXPERIMENT=<id>       Fit and calibrate an experiment.' \
-		'  make evaluate EXPERIMENT=<id> TRAINING_RUN=<id>  Test a saved training artifact.' \
+		'  make evaluate EXPERIMENT=<id> VALIDATED_RUN=<id> Test a saved validated artifact.' \
 		'  make run EXPERIMENT=<id>         Train then test an experiment.' \
 		'  make ingest DATASET=<id>        Download and validate one raw dataset.' \
 		'  make refine DATASET=<id>        Validate and refine one local dataset.' \
@@ -46,7 +46,7 @@ train:
 	PYTHONPATH=src uv run python main.py train $(EXPERIMENT)
 
 evaluate:
-	PYTHONPATH=src uv run python main.py test $(EXPERIMENT) $(TRAINING_RUN)
+	PYTHONPATH=src uv run python main.py test $(EXPERIMENT) $(VALIDATED_RUN)
 
 ingest:
 	PYTHONPATH=src uv run python main.py ingest $(DATASET)

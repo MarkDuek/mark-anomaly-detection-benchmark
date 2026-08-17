@@ -48,7 +48,8 @@ def test_inductive_protocol_fits_train_then_scores_test_without_refitting() -> N
     )
     model = TrackingModel()
 
-    validation_scores = protocol.fit_and_score_validation(model)
+    protocol.fit(model)
+    validation_scores = protocol.score_validation(model)
     test_scores = InductiveProtocol.score_test(model, test, logger)
 
     assert model.fit_features == train.features

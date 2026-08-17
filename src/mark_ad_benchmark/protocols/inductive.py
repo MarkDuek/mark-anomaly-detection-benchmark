@@ -38,10 +38,13 @@ class InductiveProtocol(Protocol):
         logger.info("Prepared inductive train and validation splits")
         return protocol
 
-    def fit_and_score_validation(self, model: AnomalyModel) -> tuple[float, ...]:
-        """Fit on train features and score validation features."""
+    def fit(self, model: AnomalyModel) -> None:
+        """Fit on train features only."""
         self.logger.info("Fitting model on train split")
         model.fit(self.train.features)
+
+    def score_validation(self, model: AnomalyModel) -> tuple[float, ...]:
+        """Score validation features without fitting the model."""
         self.logger.info("Scoring validation split")
         return tuple(model.score(self.validation.features))
 

@@ -1,11 +1,11 @@
+import json
 from pathlib import Path
 
 import pytest
 import yaml
 
 from mark_ad_benchmark.datasets.ingest import sha256
-from mark_ad_benchmark.experiment import test_experiment as evaluate_experiment
-from mark_ad_benchmark.experiment import train_experiment
+from mark_ad_benchmark.experiment import Experiment
 from mark_ad_benchmark.logging import Logger
 
 
@@ -51,40 +51,39 @@ def test_pca_training_and_testing_use_separate_artifacts(
                 "dataset": "example",
                 "model": {"name": "pca", "n_components": 1},
                 "protocol": "inductive",
+                "training": {"epochs": 1},
             }
         )
     )
 
-    training = train_experiment(
+    experiment = Experiment.from_path(
         experiment_path,
         Logger().for_component("mark_ad_benchmark.experiment"),
-        manifest_root,
-        tmp_path / "refined",
-        tmp_path / "runs",
-        "training-run",
+        manifest_root=manifest_root,
+        refined_root=tmp_path / "refined",
+        runs_root=tmp_path / "runs",
     )
+    validated = experiment.train("validated-run")
 
-    assert training.threshold == pytest.approx(2**0.5)
+    assert validated.validation.epoch == 1
+    assert validated.validation.threshold == pytest.approx(2**0.5)
     assert (
-        training.validation_metrics.precision,
-        training.validation_metrics.recall,
-        training.validation_metrics.f1,
+        validated.validation.metrics.precision,
+        validated.validation.metrics.recall,
+        validated.validation.metrics.f1,
     ) == pytest.approx((1.0, 1.0, 1.0))
-    assert (training.run_dir / "model.pkl").is_file()
-    assert (training.run_dir / "validation_scores.csv").is_file()
-    assert not (training.run_dir / "test_scores.csv").exists()
-
-    testing = evaluate_experiment(
-        experiment_path,
-        "training-run",
-        Logger().for_component("mark_ad_benchmark.experiment"),
-        manifest_root,
-        tmp_path / "refined",
-        tmp_path / "runs",
-        "test-run",
+    assert (validated.run_dir / "model.pkl").is_file()
+    assert (validated.run_dir / "validation_scores.csv").is_file()
+    assert (
+        json.loads((validated.run_dir / "validation_history.json").read_text())[0][
+            "epoch"
+        ]
+        == 1
     )
 
-    assert testing.threshold == training.threshold
+    testing = experiment.test("validated-run", "test-run")
+
+    assert testing.threshold == validated.validation.threshold
     assert (
         testing.test_metrics.precision,
         testing.test_metrics.recall,
@@ -116,12 +115,13 @@ def test_experiment_rejects_unknown_model_or_protocol_before_loading_data(
                 "dataset": "missing",
                 "model": {"name": model_name, "n_components": 1},
                 "protocol": protocol_name,
+                "training": {"epochs": 1},
             }
         )
     )
 
     with pytest.raises(ValueError, match=message):
-        train_experiment(
+        Experiment.from_path(
             experiment_path,
             Logger().for_component("mark_ad_benchmark.experiment"),
             manifest_root=tmp_path / "missing",
