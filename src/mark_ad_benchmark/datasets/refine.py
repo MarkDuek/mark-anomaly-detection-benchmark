@@ -4,9 +4,15 @@ from pathlib import Path
 import yaml
 
 from mark_ad_benchmark.datasets.ingest import sha256, validate_csv
+from mark_ad_benchmark.logging import ComponentLogger
 
 
-def refine_dataset(manifest_path: Path, raw_root: Path, refined_root: Path) -> None:
+def refine_dataset(
+    manifest_path: Path,
+    raw_root: Path,
+    refined_root: Path,
+    logger: ComponentLogger,
+) -> None:
     manifest = yaml.safe_load(manifest_path.read_text())
     raw_schema = manifest["raw_schema"]
     refined_schema = manifest["refined_schema"]
@@ -15,18 +21,23 @@ def refine_dataset(manifest_path: Path, raw_root: Path, refined_root: Path) -> N
     raw_dir = raw_root / manifest["id"]
     refined_dir = refined_root / manifest["id"]
     refined_dir.mkdir(parents=True, exist_ok=True)
+    logger.info(f"Refining dataset: {manifest['id']}")
 
     for split, remote_path in manifest["files"].items():
         raw_path = raw_dir / Path(remote_path).name
         if sha256(raw_path) != raw_checksums[split]:
-            raise ValueError(f"Checksum mismatch for {raw_path}")
+            message = f"Checksum mismatch for {raw_path}"
+            logger.error(message)
+            raise ValueError(message)
         validate_csv(raw_path, raw_schema)
         refined_path = refined_dir / f"{split}.csv"
         refine_csv(raw_path, refined_path, raw_schema, refined_schema)
         validate_csv(refined_path, refined_schema)
         refined_checksums[split] = sha256(refined_path)
+        logger.info(f"Refined {split} split: {refined_path}")
 
     manifest_path.write_text(yaml.safe_dump(manifest, sort_keys=False))
+    logger.info(f"Completed dataset refinement: {manifest['id']}")
 
 
 def refine_csv(

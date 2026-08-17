@@ -77,7 +77,11 @@ src/mark_ad_benchmark/
 ├── logging.py                  pluggable logger and outputs
 ├── datasets/
 │   ├── ingest.py               source download and raw validation
+│   ├── loader.py               refined split loading and validation
 │   └── refine.py               raw-to-refined conversion
+├── protocols/
+│   ├── base.py                  Protocol run contract
+│   └── inductive.py             train-only fit and held-out split scoring
 └── models/
     └── base.py                 AnomalyModel fit/score contract
 tests/                          unit tests
@@ -90,5 +94,5 @@ tests/                          unit tests
 - Use `uv` through the provided Make targets; do not use global `pip` or direct Python execution.
 - Keep `uv.lock` synchronized with `pyproject.toml`.
 - Validate raw data before it reaches models.
-- Register every new module in `config/logging.yaml`; configured module levels must be `info` before committing.
+- Register every module in `config/logging.yaml` and give operational modules a configured component logger; configured module levels must be `info` before committing.
 - Do not commit raw/refined data, model weights, or generated run artifacts.

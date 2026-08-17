@@ -6,12 +6,19 @@ from pathlib import Path
 import yaml
 from huggingface_hub import HfApi, hf_hub_download
 
+from mark_ad_benchmark.logging import ComponentLogger
 
-def ingest_dataset(manifest_path: Path, raw_root: Path) -> None:
+
+def ingest_dataset(
+    manifest_path: Path, raw_root: Path, logger: ComponentLogger
+) -> None:
     manifest = yaml.safe_load(manifest_path.read_text())
     source = manifest["source"]
+    logger.info(f"Ingesting raw dataset: {manifest['id']}")
     if source["type"] != "huggingface":
-        raise ValueError(f"Unsupported source type: {source['type']}")
+        message = f"Unsupported source type: {source['type']}"
+        logger.error(message)
+        raise ValueError(message)
 
     revision = source.get("revision")
     if revision is None:
@@ -36,8 +43,10 @@ def ingest_dataset(manifest_path: Path, raw_root: Path) -> None:
             shutil.copy2(downloaded_path, target_path)
         validate_csv(target_path, manifest["raw_schema"])
         checksums[split] = sha256(target_path)
+        logger.info(f"Validated raw {split} split: {target_path}")
 
     manifest_path.write_text(yaml.safe_dump(manifest, sort_keys=False))
+    logger.info(f"Completed raw dataset ingestion: {manifest['id']}")
 
 
 def validate_csv(path: Path, schema: dict[str, object]) -> None:

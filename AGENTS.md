@@ -26,6 +26,9 @@
 - Execute all Python tasks via the Makefile to ensure commands run under the correct `uv run` abstraction.
 - Run deterministic data validations (e.g., shape check, null checks) before passing data to models.
 - Add each new module to `config/logging.yaml` with its intended logging level. Before committing, set every module's configured level to `info`.
+- Require each operational production module to accept a configured component logger and emit meaningful lifecycle messages. Package initializers, tests, immutable data types, and abstract interfaces are exempt.
+- When a log entry and raised exception report the same failure, construct the message once and reuse it for both.
+- Add concise docstrings to public classes and functions when their behavior or contract is not self-evident. Do not document obvious helpers or restate type annotations.
 
 ### Never Do
 - Do not use global `pip` or standard `python` execution lines; always use the Makefile wrappers.

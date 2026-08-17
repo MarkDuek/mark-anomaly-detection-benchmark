@@ -5,6 +5,7 @@ import yaml
 
 from mark_ad_benchmark.datasets.ingest import sha256
 from mark_ad_benchmark.datasets.refine import refine_dataset
+from mark_ad_benchmark.logging import Logger
 
 
 def test_refine_dataset_writes_canonical_columns(tmp_path: Path) -> None:
@@ -32,7 +33,12 @@ def test_refine_dataset_writes_canonical_columns(tmp_path: Path) -> None:
         )
     )
 
-    refine_dataset(manifest_path, tmp_path / "raw", tmp_path / "refined")
+    refine_dataset(
+        manifest_path,
+        tmp_path / "raw",
+        tmp_path / "refined",
+        Logger().for_component("mark_ad_benchmark.datasets.refine"),
+    )
 
     refined_path = tmp_path / "refined" / "example" / "train.csv"
     assert (
@@ -70,4 +76,9 @@ def test_refine_dataset_rejects_changed_raw_file(tmp_path: Path) -> None:
     )
 
     with pytest.raises(ValueError, match="Checksum mismatch"):
-        refine_dataset(manifest_path, tmp_path / "raw", tmp_path / "refined")
+        refine_dataset(
+            manifest_path,
+            tmp_path / "raw",
+            tmp_path / "refined",
+            Logger().for_component("mark_ad_benchmark.datasets.refine"),
+        )
