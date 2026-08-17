@@ -1,8 +1,11 @@
 # Mark Anomaly Detection Benchmark
 
-[![Python](https://img.shields.io/badge/python-3.11-blue)](https://www.python.org/)
-[![uv](https://img.shields.io/badge/package%20manager-uv-de5fe9)](https://docs.astral.sh/uv/)
-[![Ruff](https://img.shields.io/badge/linting-ruff-d7ff64)](https://docs.astral.sh/ruff/)
+<p align="center">
+  <a href="https://www.python.org/"><img alt="Python" src="https://img.shields.io/badge/Python-3776AB?style=for-the-badge&logo=python&logoColor=white"></a>
+  <a href="https://huggingface.co/"><img alt="Hugging Face" src="https://img.shields.io/badge/Hugging%20Face-FDEE21?style=for-the-badge&logo=huggingface&logoColor=black"></a>
+  <a href="https://docs.astral.sh/uv/"><img alt="uv" src="https://img.shields.io/badge/uv-DE5FE9?style=for-the-badge&logo=uv&logoColor=white"></a>
+  <a href="https://docs.astral.sh/ruff/"><img alt="Ruff" src="https://img.shields.io/badge/Ruff-D7FF64?style=for-the-badge&logo=ruff&logoColor=black"></a>
+</p>
 
 A reproducible, manifest-driven benchmark for multivariate time-series anomaly detection. It ingests source data locally, refines it into a common schema, and provides the foundations for comparable model scoring and evaluation.
 
