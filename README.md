@@ -1,2 +1,91 @@
-# mark-anomaly-detection-benchmark
-Mark's Anomaly Dection Benchmark.
+# Mark Anomaly Detection Benchmark
+
+[![Python](https://img.shields.io/badge/python-3.11-blue)](https://www.python.org/)
+[![uv](https://img.shields.io/badge/package%20manager-uv-de5fe9)](https://docs.astral.sh/uv/)
+[![Ruff](https://img.shields.io/badge/linting-ruff-d7ff64)](https://docs.astral.sh/ruff/)
+
+A reproducible, manifest-driven benchmark for multivariate time-series anomaly detection. It ingests source data locally, refines it into a common schema, and provides the foundations for comparable model scoring and evaluation.
+
+## Setup
+
+```sh
+make setup
+```
+
+This installs `uv` if necessary and synchronizes the locked Python 3.11 project environment, including development dependencies.
+
+## Usage
+
+Prepare one dataset from its manifest:
+
+```sh
+make prepare DATASET=calit2
+```
+
+Prepare all versioned dataset manifests:
+
+```sh
+make prepare-all
+```
+
+Individual stages are also available:
+
+```sh
+make ingest DATASET=calit2
+make refine DATASET=calit2
+make ingest-all
+```
+
+Run quality checks:
+
+```sh
+make format
+make lint
+make test
+```
+
+## Data Lifecycle
+
+Each dataset begins with a versioned manifest in `data/manifests/<dataset-id>.yaml`. The manifest declares its source revision, split files, native raw schema, refined schema, and SHA-256 checksums.
+
+```text
+source repository or archive
+-> data/raw/<dataset-id>/
+-> data/refined/<dataset-id>/
+-> benchmark models and evaluation
+```
+
+Raw data preserves source fields. Refinement produces the benchmark schema:
+
+```text
+timestamp,feature_0,...,feature_n,label
+```
+
+Raw and refined files are local artifacts and are not committed to Git. The manifest records their provenance and checksums.
+
+## Current Architecture
+
+```text
+main.py                         executable CLI shim
+config/logging.yaml             project-wide logging-level policy
+data/manifests/                 versioned dataset provenance and schemas
+src/mark_ad_benchmark/
+├── cli.py                      command parsing and dispatch
+├── logging.py                  pluggable logger and outputs
+├── datasets/
+│   ├── ingest.py               source download and raw validation
+│   └── refine.py               raw-to-refined conversion
+└── models/
+    └── base.py                 AnomalyModel fit/score contract
+tests/                          unit tests
+```
+
+`main.py` contains no application logic. The package CLI dispatches commands to dataset workflows and, later, experiment execution. Models own anomaly-score calculations; protocols prepare data; evaluation owns metric and threshold policy.
+
+## Development Rules
+
+- Use `uv` through the provided Make targets; do not use global `pip` or direct Python execution.
+- Keep `uv.lock` synchronized with `pyproject.toml`.
+- Validate raw data before it reaches models.
+- Register every new module in `config/logging.yaml`; configured module levels must be `info` before committing.
+- Do not commit raw/refined data, model weights, or generated run artifacts.

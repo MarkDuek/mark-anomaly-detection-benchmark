@@ -51,3 +51,8 @@
 - Never add a parantheses prefix to the commit type (e.g., "feat: ..." instead of "feat(): ...").
 - Use the imperative mood in commit messages (e.g., "Add feature" instead of "Added feature").
 - Keep commit messages concise and descriptive, ideally under 50 characters for the subject line.
+
+## Documentation
+- README.md should be concise, focusing on the purpose of the project, installation instructions, and usage examples.
+- README.md should contain the current implemented project architecture.
+- README.md should contain updated badges in the header section.
