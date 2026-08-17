@@ -2,3 +2,4 @@ default_level: info
 component_levels:
   mark_ad_benchmark.cli: info
   mark_ad_benchmark.datasets.refine: info
+  mark_ad_benchmark.models.base: info
