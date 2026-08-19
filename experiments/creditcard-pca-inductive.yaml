@@ -1,0 +1,19 @@
+id: creditcard-pca-inductive
+dataset: creditcard
+model:
+  name: pca
+  parameters:
+    n_components: 5
+protocol: inductive
+training:
+  epochs: 1
+threshold:
+  name: validation_f1
+selection:
+  metric: f1
+  direction: maximize
+metrics:
+  point:
+  - precision
+  - recall
+  - f1

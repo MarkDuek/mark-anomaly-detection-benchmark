@@ -1,0 +1,84 @@
+id: creditcard
+source:
+  type: huggingface
+  repository: PLAN-Lab/mTSBench
+  revision: 9ea52adfa86373576f446a7f3f26395e506f1b8b
+files:
+  train: creditcard/creditcard_train.csv
+  validation: creditcard/creditcard_val.csv
+  test: creditcard/creditcard_test.csv
+raw_schema:
+  timestamp: timestamp
+  features:
+  - V1
+  - V2
+  - V3
+  - V4
+  - V5
+  - V6
+  - V7
+  - V8
+  - V9
+  - V10
+  - V11
+  - V12
+  - V13
+  - V14
+  - V15
+  - V16
+  - V17
+  - V18
+  - V19
+  - V20
+  - V21
+  - V22
+  - V23
+  - V24
+  - V25
+  - V26
+  - V27
+  - V28
+  - Amount
+  label: is_anomaly
+refined_schema:
+  timestamp: timestamp
+  features:
+  - feature_0
+  - feature_1
+  - feature_2
+  - feature_3
+  - feature_4
+  - feature_5
+  - feature_6
+  - feature_7
+  - feature_8
+  - feature_9
+  - feature_10
+  - feature_11
+  - feature_12
+  - feature_13
+  - feature_14
+  - feature_15
+  - feature_16
+  - feature_17
+  - feature_18
+  - feature_19
+  - feature_20
+  - feature_21
+  - feature_22
+  - feature_23
+  - feature_24
+  - feature_25
+  - feature_26
+  - feature_27
+  - feature_28
+  label: label
+checksums:
+  raw:
+    train: af355a6ba69b6621407380471bbf52ddeb257d3113cd256228fc93ed9e5e20bf
+    validation: b7ed6ae2031fd88d73483a0055cd788ed11939f18f99e261d18647102b0fe368
+    test: 8609583da5931e5cd45ed47d4258a2c0f06d9661e48b68de5350719035542384
+  refined:
+    train: c112ccac59d53d19eea8bd6f49c1ede7861f18bf08e4e70fb21c44fc96480c16
+    validation: 2ad2d3e1723872ad02840702d2c56065c2963f595a3e6551183b816681038942
+    test: cebc90c253c8de697ac9a67f8dc3726ba736d10f00a5b7fbbd2e7d4396cb0e42
