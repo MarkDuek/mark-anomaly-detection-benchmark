@@ -1,6 +1,6 @@
 .DEFAULT_GOAL := help
 
-.PHONY: help setup sync format lint test train evaluate run ingest refine prepare ingest-all prepare-all
+.PHONY: help setup sync format lint test train evaluate run visualize ingest refine prepare ingest-all prepare-all
 
 UV := $(shell command -v uv 2>/dev/null || printf '%s' "$(HOME)/.local/bin/uv")
 
@@ -15,6 +15,7 @@ help:
 		'  make train EXPERIMENT=<id>       Fit and calibrate an experiment.' \
 		'  make evaluate EXPERIMENT=<id> VALIDATED_RUN=<id> Test a saved validated artifact.' \
 		'  make run EXPERIMENT=<id>         Train then test an experiment.' \
+		'  make visualize                    Write an interactive test-run HTML dashboard.' \
 		'  make ingest DATASET=<id>        Download and validate one raw dataset.' \
 		'  make refine DATASET=<id>        Validate and refine one local dataset.' \
 		'  make prepare DATASET=<id>       Ingest then refine one dataset.' \
@@ -47,6 +48,9 @@ train:
 
 evaluate:
 	PYTHONPATH=src uv run python main.py test $(EXPERIMENT) $(VALIDATED_RUN)
+
+visualize:
+	PYTHONPATH=src uv run python main.py visualize
 
 ingest:
 	PYTHONPATH=src uv run python main.py ingest $(DATASET)

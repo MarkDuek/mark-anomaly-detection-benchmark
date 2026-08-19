@@ -5,6 +5,7 @@ from mark_ad_benchmark.datasets.ingest import ingest_dataset
 from mark_ad_benchmark.datasets.refine import refine_dataset
 from mark_ad_benchmark.experiment import Experiment
 from mark_ad_benchmark.logging import ConsoleOutput, Logger
+from mark_ad_benchmark.visualization import visualize_runs
 
 
 def main(argv: list[str] | None = None) -> None:
@@ -17,9 +18,18 @@ def main(argv: list[str] | None = None) -> None:
     test_parser = subparsers.add_parser("test")
     test_parser.add_argument("experiment_id")
     test_parser.add_argument("validated_run_id")
+    subparsers.add_parser("visualize")
     args = parser.parse_args(argv)
     logger = Logger.from_config(Path("config/logging.yaml"), ConsoleOutput())
     component_logger = logger.for_component(__name__)
+    if args.command == "visualize":
+        component_logger.info("Writing visualization dashboard")
+        visualize_runs(
+            component_logger.for_component(
+                "mark_ad_benchmark.visualization.timeseries"
+            ),
+        )
+        return
     if args.command in {"train", "test", "run"}:
         experiment_path = Path("experiments") / f"{args.experiment_id}.yaml"
         if not experiment_path.is_file():

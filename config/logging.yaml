@@ -3,6 +3,7 @@ component_levels:
   mark_ad_benchmark.cli: info
   mark_ad_benchmark.thresholds.base: info
   mark_ad_benchmark.thresholds.best_f1: info
+  mark_ad_benchmark.visualization.timeseries: info
   mark_ad_benchmark.datasets.ingest: info
   mark_ad_benchmark.datasets.loader: info
   mark_ad_benchmark.datasets.refine: info

@@ -65,3 +65,15 @@ def test_cli_dispatches_training_and_testing(
     assert calls[1] == ("train",)
     assert calls[2][0] == Path("experiments/calit2-pca-inductive.yaml")
     assert calls[3] == ("test", "training-run")
+
+
+def test_cli_dispatches_visualization(monkeypatch: pytest.MonkeyPatch) -> None:
+    calls: list[tuple[object, ...]] = []
+    monkeypatch.setattr(
+        "mark_ad_benchmark.cli.visualize_runs", lambda *args: calls.append(args)
+    )
+
+    cli.main(["visualize"])
+
+    assert len(calls) == 1
+    assert isinstance(calls[0][0], ComponentLogger)

@@ -67,6 +67,14 @@ Run both phases as a convenience workflow:
 make run EXPERIMENT=calit2-pca-inductive
 ```
 
+Build a browser dashboard for every saved test run:
+
+```sh
+make visualize
+```
+
+This writes `runs/visualization.html`. Its test-run selector displays every saved test run. Select only the features you want to plot, then inspect original refined feature series, true anomalies in red, anomaly scores, predictions, threshold, and test metrics without rerunning inference. Large series are evenly downsampled for display while retaining every true anomaly.
+
 Run quality checks:
 
 ```sh
@@ -117,6 +125,8 @@ src/mark_ad_benchmark/
 │   └── inductive.py             train-only fit, validation, and test scoring
 ├── metrics/
 │   └── point.py                 thresholded precision, recall, and F1
+├── visualization/
+│   └── timeseries.py             saved test-run Plotly dashboard
 └── models/
     ├── base.py                 AnomalyModel fit/score/persistence contract
     └── pca.py                  mean-centered reconstruction-residual PCA
