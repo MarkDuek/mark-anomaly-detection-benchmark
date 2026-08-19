@@ -14,12 +14,42 @@ class BestF1ThresholdSelector(ThresholdSelector):
     def fit(self, scores: Sequence[float], labels: Sequence[int]) -> float:
         """Select a threshold using labeled validation scores."""
         validate_inputs(scores, labels, self.logger)
-        threshold = max(
-            {*scores, math.inf},
-            key=lambda candidate: (point_f1(scores, labels, candidate), candidate),
-        )
-        self.logger.info(f"Selected validation F1 threshold: {threshold}")
-        return threshold
+        best_threshold = math.inf
+        best_f1 = 0.0
+        true_positives = 0
+        false_positives = 0
+        positives = sum(labels)
+        ordered = sorted(zip(scores, labels), reverse=True)
+        index = 0
+        while index < len(ordered):
+            threshold = ordered[index][0]
+            while index < len(ordered) and ordered[index][0] == threshold:
+                if ordered[index][1]:
+                    true_positives += 1
+                else:
+                    false_positives += 1
+                index += 1
+            false_negatives = positives - true_positives
+            precision = (
+                true_positives / (true_positives + false_positives)
+                if true_positives + false_positives
+                else 0.0
+            )
+            recall = (
+                true_positives / (true_positives + false_negatives)
+                if true_positives + false_negatives
+                else 0.0
+            )
+            f1 = (
+                2 * precision * recall / (precision + recall)
+                if precision + recall
+                else 0.0
+            )
+            if f1 > best_f1:
+                best_f1 = f1
+                best_threshold = threshold
+        self.logger.info(f"Selected validation F1 threshold: {best_threshold}")
+        return best_threshold
 
 
 def validate_inputs(
@@ -37,26 +67,3 @@ def validate_inputs(
         message = "Threshold selection requires finite scores"
         logger.error(message)
         raise ValueError(message)
-
-
-def point_f1(scores: Sequence[float], labels: Sequence[int], threshold: float) -> float:
-    true_positives = sum(
-        label == 1 and score >= threshold for score, label in zip(scores, labels)
-    )
-    false_positives = sum(
-        label == 0 and score >= threshold for score, label in zip(scores, labels)
-    )
-    false_negatives = sum(
-        label == 1 and score < threshold for score, label in zip(scores, labels)
-    )
-    precision = (
-        true_positives / (true_positives + false_positives)
-        if true_positives + false_positives
-        else 0.0
-    )
-    recall = (
-        true_positives / (true_positives + false_negatives)
-        if true_positives + false_negatives
-        else 0.0
-    )
-    return 2 * precision * recall / (precision + recall) if precision + recall else 0.0

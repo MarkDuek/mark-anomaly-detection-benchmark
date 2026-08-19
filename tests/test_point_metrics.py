@@ -1,3 +1,5 @@
+import math
+
 import pytest
 
 from mark_ad_benchmark.logging import Logger
@@ -17,3 +19,11 @@ def test_validation_f1_threshold_applies_to_point_metrics() -> None:
     assert (metrics.precision, metrics.recall, metrics.f1) == pytest.approx(
         (1.0, 1.0, 1.0)
     )
+
+
+def test_validation_f1_threshold_selects_no_predictions_without_positives() -> None:
+    threshold = BestF1ThresholdSelector(
+        Logger().for_component("mark_ad_benchmark.thresholds.best_f1")
+    ).fit((0.2, 0.8), (0, 0))
+
+    assert threshold == math.inf
