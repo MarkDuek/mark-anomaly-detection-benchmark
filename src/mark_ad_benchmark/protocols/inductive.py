@@ -4,7 +4,7 @@ from typing import ClassVar
 
 from mark_ad_benchmark.datasets.loader import DatasetSplit
 from mark_ad_benchmark.logging import ComponentLogger
-from mark_ad_benchmark.models import AnomalyModel
+from mark_ad_benchmark.models import InductiveAnomalyModel
 from mark_ad_benchmark.protocols.base import Protocol
 
 
@@ -15,6 +15,7 @@ class InductiveProtocol(Protocol):
     train: DatasetSplit
     validation: DatasetSplit
     logger: ComponentLogger
+    execution_mode: ClassVar[str] = "inductive"
     training_required_splits: ClassVar[tuple[str, ...]] = ("train", "validation")
     test_required_splits: ClassVar[tuple[str, ...]] = ("test",)
 
@@ -38,19 +39,22 @@ class InductiveProtocol(Protocol):
         logger.info("Prepared inductive train and validation splits")
         return protocol
 
-    def fit(self, model: AnomalyModel) -> None:
+    def fit(self, model: InductiveAnomalyModel) -> None:
         """Fit on train features only."""
         self.logger.info("Fitting model on train split")
         model.fit(self.train.features)
 
-    def score_validation(self, model: AnomalyModel) -> tuple[float, ...]:
+    def score_validation(self, model: InductiveAnomalyModel) -> tuple[float, ...]:
         """Score validation features without fitting the model."""
         self.logger.info("Scoring validation split")
         return model.score(self.validation.features)
 
     @classmethod
     def score_test(
-        cls, model: AnomalyModel, test: DatasetSplit, logger: ComponentLogger
+        cls,
+        model: InductiveAnomalyModel,
+        test: DatasetSplit,
+        logger: ComponentLogger,
     ) -> tuple[float, ...]:
         """Score test features without fitting the supplied model."""
         logger.info("Scoring test split")

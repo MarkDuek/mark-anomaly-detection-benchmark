@@ -3,6 +3,7 @@ import json
 from dataclasses import asdict, dataclass
 from datetime import UTC, datetime
 from importlib import import_module
+from itertools import product
 from pathlib import Path
 
 import yaml
@@ -10,6 +11,7 @@ import yaml
 from mark_ad_benchmark.datasets.loader import DatasetSplit, load_refined_dataset
 from mark_ad_benchmark.logging import ComponentLogger
 from mark_ad_benchmark.metrics import PointMetrics, point_metrics
+from mark_ad_benchmark.models import InductiveAnomalyModel, TransductiveAnomalyModel
 
 
 @dataclass(frozen=True)
@@ -19,6 +21,8 @@ class ValidationResult:
     metrics: PointMetrics
     selection_value: float
     scores: tuple[float, ...]
+    model_diagnostics: dict[str, object]
+    model_parameters: dict[str, object]
 
 
 @dataclass(frozen=True)
@@ -71,6 +75,7 @@ class Experiment:
             "threshold selector",
             logger,
         )
+        self.validate_component_compatibility()
 
     @classmethod
     def from_path(
@@ -96,39 +101,38 @@ class Experiment:
             splits, self.logger.for_component(self.protocol_module)
         )
 
-        # 3. instantiate model
-        model = self.model_type(
-            self.definition["model"]["parameters"],
-            self.logger.for_component(self.model_module),
-        )
-
-        # 4. run set up
+        # 3. run set up
         validated_run_id = run_id or create_run_id(f"{self.definition['id']}-validated")
         self.runs_root.mkdir(parents=True, exist_ok=True)
         checkpoint_path = self.runs_root / f".{validated_run_id}.checkpoint"
         best_validation: ValidationResult | None = None
         history: list[dict[str, object]] = []
 
-        # 5. training loop
-        for epoch in range(1, self.definition["training"]["epochs"] + 1):
-            self.logger.info(f"Training epoch {epoch}")
+        # 4. validate every configured model parameter candidate
+        for parameters in self.model_parameter_candidates():
+            model = self.create_model(parameters)
+            for epoch in range(1, self.definition["training"]["epochs"] + 1):
+                self.logger.info(f"Validating epoch {epoch}: parameters={parameters}")
 
-            # 5.1 fit model on training data
-            protocol.fit(model)
-            validation = self.validate(model, protocol, epoch)
-            history.append(
-                {
-                    "epoch": epoch,
-                    "threshold": validation.threshold,
-                    "metrics": asdict(validation.metrics),
-                    "selection_value": validation.selection_value,
-                }
-            )
-            if best_validation is None or self.is_better(
-                validation.selection_value, best_validation.selection_value
-            ):
-                model.save(checkpoint_path)
-                best_validation = validation
+                if self.execution_mode == "inductive":
+                    protocol.fit(model)
+                validation = self.validate(model, protocol, epoch, parameters)
+                history.append(
+                    {
+                        "epoch": epoch,
+                        "model_parameters": validation.model_parameters,
+                        "threshold": validation.threshold,
+                        "metrics": asdict(validation.metrics),
+                        "selection_value": validation.selection_value,
+                        "model_diagnostics": validation.model_diagnostics,
+                    }
+                )
+                if best_validation is None or self.is_better(
+                    validation.selection_value, best_validation.selection_value
+                ):
+                    if self.execution_mode == "inductive":
+                        model.save(checkpoint_path)
+                    best_validation = validation
 
         if best_validation is None:
             message = "Experiment training did not produce validation results"
@@ -136,7 +140,8 @@ class Experiment:
             raise ValueError(message)
         run_dir = self.runs_root / validated_run_id
         run_dir.mkdir(parents=True, exist_ok=False)
-        checkpoint_path.replace(run_dir / "model.pkl")
+        if self.execution_mode == "inductive":
+            checkpoint_path.replace(run_dir / "model.pkl")
         write_scores(
             run_dir / "validation_scores.csv",
             "validation",
@@ -155,6 +160,8 @@ class Experiment:
                     "selection": self.definition["selection"],
                     "selection_value": best_validation.selection_value,
                     "validation": asdict(best_validation.metrics),
+                    "model_diagnostics": best_validation.model_diagnostics,
+                    "selected_model_parameters": best_validation.model_parameters,
                 },
                 indent=2,
                 sort_keys=True,
@@ -174,26 +181,37 @@ class Experiment:
                 "protocol": {
                     "module": self.protocol_module,
                     "class": self.protocol_type.__name__,
+                    "execution_mode": self.execution_mode,
                 },
                 "threshold_selector": self.component_identity(
                     self.threshold_module, self.threshold_type
                 ),
                 "selected_epoch": best_validation.epoch,
                 "selected_threshold": best_validation.threshold,
+                "selected_model_parameters": best_validation.model_parameters,
                 "selection": self.definition["selection"],
                 "selection_value": best_validation.selection_value,
+                "model_diagnostics": best_validation.model_diagnostics,
             },
         )
         self.logger.info(
-            f"Completed training: {self.definition['selection']['metric']}={best_validation.selection_value}, run_dir={run_dir}"
+            f"Completed training: {self.definition['selection']['metric']}={best_validation.selection_value}, parameters={best_validation.model_parameters}, run_dir={run_dir}"
         )
         return ValidatedRun(run_dir, best_validation)
 
-    def validate(self, model: object, protocol: object, epoch: int) -> ValidationResult:
-        """Calibrate a trained model on validation data without fitting it."""
+    def validate(
+        self,
+        model: object,
+        protocol: object,
+        epoch: int,
+        model_parameters: dict[str, object],
+    ) -> ValidationResult:
+        """Calibrate one protocol-compatible model on validation data."""
 
-        # .1. score model on validation split
-        scores = protocol.score_validation(model)
+        if self.execution_mode == "inductive":
+            scores = protocol.score_validation(model)
+        else:
+            scores = protocol.fit_score_validation(model)
         metrics_logger = self.logger.for_component("mark_ad_benchmark.metrics.point")
         selector = self.threshold_type(self.logger.for_component(self.threshold_module))
         threshold = selector.fit(scores, protocol.validation.labels)
@@ -204,10 +222,18 @@ class Experiment:
         self.logger.info(
             f"Validated epoch {epoch}: {self.definition['selection']['metric']}={selection_value}"
         )
-        return ValidationResult(epoch, threshold, metrics, selection_value, scores)
+        return ValidationResult(
+            epoch,
+            threshold,
+            metrics,
+            selection_value,
+            scores,
+            self.model_diagnostics(model),
+            model_parameters,
+        )
 
     def test(self, validated_run_id: str, run_id: str | None = None) -> TestResult:
-        """Evaluate a validated artifact on test data without fitting it."""
+        """Evaluate a validated artifact using its protocol's test lifecycle."""
         validated_dir = self.runs_root / validated_run_id
         manifest_path = validated_dir / "manifest.json"
         if not manifest_path.is_file():
@@ -223,10 +249,10 @@ class Experiment:
             message = "Validated artifact does not match the experiment definition"
             self.logger.error(message)
             raise ValueError(message)
-        if validated_manifest["model"] != self.component_identity(
-            self.model_module, self.model_type
-        ) or validated_manifest["protocol"] != self.component_identity(
-            self.protocol_module, self.protocol_type
+        if (
+            validated_manifest["model"]
+            != self.component_identity(self.model_module, self.model_type)
+            or validated_manifest["protocol"] != self.protocol_identity()
         ):
             message = (
                 "Validated artifact components do not match the available catalogs"
@@ -245,9 +271,13 @@ class Experiment:
             message = "Validated artifact does not match the dataset manifest"
             self.logger.error(message)
             raise ValueError(message)
-        model = self.model_type.load(
-            validated_dir / "model.pkl", self.logger.for_component(self.model_module)
-        )
+        if self.execution_mode == "inductive":
+            model = self.model_type.load(
+                validated_dir / "model.pkl",
+                self.logger.for_component(self.model_module),
+            )
+        else:
+            model = self.create_model(validated_manifest["selected_model_parameters"])
         splits = load_refined_dataset(
             dataset_path,
             self.refined_root,
@@ -255,9 +285,14 @@ class Experiment:
             self.protocol_type.test_required_splits,
         )
         test_split = splits["test"]
-        scores = self.protocol_type.score_test(
-            model, test_split, self.logger.for_component(self.protocol_module)
-        )
+        if self.execution_mode == "inductive":
+            scores = self.protocol_type.score_test(
+                model, test_split, self.logger.for_component(self.protocol_module)
+            )
+        else:
+            scores = self.protocol_type.fit_score_test(
+                model, test_split, self.logger.for_component(self.protocol_module)
+            )
         threshold = validated_manifest["selected_threshold"]
         metrics = point_metrics(
             test_split.labels,
@@ -271,7 +306,11 @@ class Experiment:
         write_scores(run_dir / "test_scores.csv", "test", test_split, scores, threshold)
         (run_dir / "metrics.json").write_text(
             json.dumps(
-                {"threshold": threshold, "test": asdict(metrics)},
+                {
+                    "threshold": threshold,
+                    "test": asdict(metrics),
+                    "model_diagnostics": self.model_diagnostics(model),
+                },
                 indent=2,
                 sort_keys=True,
             )
@@ -284,6 +323,10 @@ class Experiment:
                 "experiment": self.definition,
                 "validated_run": validated_run_id,
                 "threshold": threshold,
+                "model_diagnostics": self.model_diagnostics(model),
+                "selected_model_parameters": validated_manifest[
+                    "selected_model_parameters"
+                ],
             },
         )
         self.logger.info(f"Completed testing: test_f1={metrics.f1}, run_dir={run_dir}")
@@ -318,6 +361,19 @@ class Experiment:
             message = "Experiment threshold.name must be a string"
             self.logger.error(message)
             raise TypeError(message)
+        model = self.definition.get("model")
+        if not isinstance(model, dict) or not isinstance(model.get("parameters"), dict):
+            message = "Experiment model.parameters must be a mapping"
+            self.logger.error(message)
+            raise TypeError(message)
+        candidates = model.get("candidates", {})
+        if not isinstance(candidates, dict) or any(
+            not isinstance(name, str) or not isinstance(values, list) or not values
+            for name, values in candidates.items()
+        ):
+            message = "Experiment model.candidates must map names to nonempty lists"
+            self.logger.error(message)
+            raise TypeError(message)
         selection = self.definition.get("selection")
         if not isinstance(selection, dict):
             message = "Experiment selection must be a mapping"
@@ -338,6 +394,59 @@ class Experiment:
             return candidate > current
         return candidate < current
 
+    @property
+    def execution_mode(self) -> str:
+        """Return the lifecycle mode declared by the selected protocol."""
+        return self.protocol_type.execution_mode
+
+    def validate_component_compatibility(self) -> None:
+        """Reject model and protocol combinations with incompatible lifecycles."""
+        mode = getattr(self.protocol_type, "execution_mode", None)
+        if mode == "inductive":
+            compatible = issubclass(self.model_type, InductiveAnomalyModel)
+        elif mode == "transductive":
+            compatible = issubclass(self.model_type, TransductiveAnomalyModel)
+            if self.definition["training"]["epochs"] != 1:
+                message = (
+                    "Transductive experiments require training.epochs to equal one"
+                )
+                self.logger.error(message)
+                raise ValueError(message)
+        else:
+            message = f"Unsupported protocol execution mode: {mode}"
+            self.logger.error(message)
+            raise ValueError(message)
+        if not compatible:
+            message = f"Model is incompatible with {mode} protocol"
+            self.logger.error(message)
+            raise TypeError(message)
+
+    def create_model(self, parameters: dict[str, object] | None = None) -> object:
+        """Instantiate the configured model with a component-scoped logger."""
+        return self.model_type(
+            parameters or self.definition["model"]["parameters"],
+            self.logger.for_component(self.model_module),
+        )
+
+    def model_parameter_candidates(self) -> tuple[dict[str, object], ...]:
+        """Return the Cartesian product of explicit validation candidates."""
+        model = self.definition["model"]
+        parameters = model["parameters"]
+        candidates = model.get("candidates", {})
+        if not candidates:
+            return (dict(parameters),)
+        names = tuple(candidates)
+        return tuple(
+            {**parameters, **dict(zip(names, values, strict=True))}
+            for values in product(*(candidates[name] for name in names))
+        )
+
+    def model_diagnostics(self, model: object) -> dict[str, object]:
+        """Return batch-model diagnostics while preserving inductive artifacts."""
+        if self.execution_mode == "transductive":
+            return dict(model.diagnostics)
+        return {}
+
     def load_dataset_manifest(self) -> tuple[Path, dict[str, object]]:
         """Load the dataset manifest referenced by this experiment."""
         path = self.manifest_root / f"{self.definition['dataset']}.yaml"
@@ -350,6 +459,13 @@ class Experiment:
     @staticmethod
     def component_identity(module: str, component_type: object) -> dict[str, str]:
         return {"module": module, "class": component_type.__name__}
+
+    def protocol_identity(self) -> dict[str, str]:
+        """Return the protocol identity including its declared lifecycle mode."""
+        return {
+            **self.component_identity(self.protocol_module, self.protocol_type),
+            "execution_mode": self.execution_mode,
+        }
 
 
 def resolve_available_component(

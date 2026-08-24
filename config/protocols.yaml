@@ -1,3 +1,6 @@
 inductive:
   module: mark_ad_benchmark.protocols.inductive
   class: InductiveProtocol
+transductive:
+  module: mark_ad_benchmark.protocols.transductive
+  class: TransductiveProtocol

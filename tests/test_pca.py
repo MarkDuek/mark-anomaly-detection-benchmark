@@ -28,7 +28,8 @@ def test_pca_scores_reconstruction_residuals_through_inductive_protocol() -> Non
         logger.for_component("mark_ad_benchmark.protocols.inductive"),
     )
     model = PCAModel(
-        {"n_components": 1}, logger.for_component("mark_ad_benchmark.models.pca")
+        {"n_components": 1, "feature_scaling": "standard"},
+        logger.for_component("mark_ad_benchmark.models.pca"),
     )
 
     protocol.fit(model)
@@ -37,8 +38,8 @@ def test_pca_scores_reconstruction_residuals_through_inductive_protocol() -> Non
         model, split(((2.0, 2.0), (0.0, 2.0))), protocol.logger
     )
 
-    assert validation_scores == pytest.approx((0.0, math.sqrt(2)))
-    assert test_scores == pytest.approx((0.0, math.sqrt(2)))
+    assert validation_scores == pytest.approx((0.0, math.sqrt(3)))
+    assert test_scores == pytest.approx((0.0, math.sqrt(3)))
     assert output.messages == [
         "[INFO] Prepared inductive train and validation splits",
         "[INFO] Fitting model on train split",
@@ -52,7 +53,7 @@ def test_pca_scores_reconstruction_residuals_through_inductive_protocol() -> Non
 
 def test_pca_rejects_full_feature_reconstruction() -> None:
     model = PCAModel(
-        {"n_components": 2},
+        {"n_components": 2, "feature_scaling": "standard"},
         Logger().for_component("mark_ad_benchmark.models.pca"),
     )
 
@@ -60,9 +61,18 @@ def test_pca_rejects_full_feature_reconstruction() -> None:
         model.fit(((0.0, 0.0), (1.0, 1.0)))
 
 
+def test_pca_uses_configured_feature_scaling() -> None:
+    logger = Logger().for_component("mark_ad_benchmark.models.pca")
+    model = PCAModel({"n_components": 1, "feature_scaling": "none"}, logger)
+
+    model.fit(((0.0, 0.0), (1.0, 1.0), (2.0, 2.0)))
+
+    assert model.score(((1.0, 3.0),)) == pytest.approx((math.sqrt(2),))
+
+
 def test_pca_save_and_load_preserves_scores(tmp_path: Path) -> None:
     logger = Logger().for_component("mark_ad_benchmark.models.pca")
-    model = PCAModel({"n_components": 1}, logger)
+    model = PCAModel({"n_components": 1, "feature_scaling": "standard"}, logger)
     model.fit(((0.0, 0.0), (1.0, 1.0), (2.0, 2.0)))
     path = tmp_path / "model.pkl"
     model.save(path)

@@ -49,7 +49,10 @@ def test_pca_training_and_testing_use_separate_artifacts(
             {
                 "id": "example-pca-inductive",
                 "dataset": "example",
-                "model": {"name": "pca", "parameters": {"n_components": 1}},
+                "model": {
+                    "name": "pca",
+                    "parameters": {"n_components": 1, "feature_scaling": "standard"},
+                },
                 "protocol": "inductive",
                 "training": {"epochs": 1},
                 "threshold": {"name": "validation_f1"},
@@ -68,7 +71,7 @@ def test_pca_training_and_testing_use_separate_artifacts(
     validated = experiment.train("validated-run")
 
     assert validated.validation.epoch == 1
-    assert validated.validation.threshold == pytest.approx(2**0.5)
+    assert validated.validation.threshold == pytest.approx(3**0.5)
     assert (
         validated.validation.metrics.precision,
         validated.validation.metrics.recall,

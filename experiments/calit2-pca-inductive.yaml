@@ -4,6 +4,10 @@ model:
   name: pca
   parameters:
     n_components: 1
+  candidates:
+    feature_scaling:
+    - none
+    - standard
 protocol: inductive
 training:
   epochs: 1

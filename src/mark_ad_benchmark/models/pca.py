@@ -4,13 +4,14 @@ from collections.abc import Mapping, Sequence
 from pathlib import Path
 
 from sklearn.decomposition import PCA
+from sklearn.preprocessing import StandardScaler
 
 from mark_ad_benchmark.logging import ComponentLogger
-from mark_ad_benchmark.models.base import AnomalyModel
+from mark_ad_benchmark.models.base import InductiveAnomalyModel
 
 
-class PCAModel(AnomalyModel):
-    """Mean-centered PCA with Euclidean reconstruction-residual scores."""
+class PCAModel(InductiveAnomalyModel):
+    """Configurable train-scaled PCA with Euclidean reconstruction-residual scores."""
 
     def __init__(
         self, parameters: Mapping[str, object], logger: ComponentLogger
@@ -24,9 +25,16 @@ class PCAModel(AnomalyModel):
             message = "PCA requires at least one component"
             logger.error(message)
             raise ValueError(message)
+        feature_scaling = parameters.get("feature_scaling")
+        if feature_scaling not in {"none", "standard"}:
+            message = "PCA feature_scaling must be none or standard"
+            logger.error(message)
+            raise ValueError(message)
         self.n_components = n_components
+        self.feature_scaling = feature_scaling
         self.logger = logger
         self.pca = PCA(n_components=n_components)
+        self.scaler = StandardScaler() if feature_scaling == "standard" else None
         self.feature_width: int | None = None
 
     def fit(self, features: Sequence[Sequence[float]]) -> None:
@@ -39,7 +47,7 @@ class PCAModel(AnomalyModel):
         self.logger.info(
             f"Fitting PCA with {self.n_components} components on {len(features)} rows"
         )
-        self.pca.fit(features)
+        self.pca.fit(self.fit_scale(features))
         self.feature_width = feature_width
 
     def score(self, features: Sequence[Sequence[float]]) -> tuple[float, ...]:
@@ -52,11 +60,12 @@ class PCAModel(AnomalyModel):
             message = "PCA scoring features have an incompatible width"
             self.logger.error(message)
             raise ValueError(message)
-        reconstructed = self.pca.inverse_transform(self.pca.transform(features))
+        scaled = self.scale(features)
+        reconstructed = self.pca.inverse_transform(self.pca.transform(scaled))
         scores = tuple(
             math.dist(feature_row, reconstructed_row)
             for feature_row, reconstructed_row in zip(
-                features, reconstructed, strict=True
+                scaled, reconstructed, strict=True
             )
         )
         self.logger.info(f"Scored {len(scores)} rows with PCA")
@@ -72,8 +81,10 @@ class PCAModel(AnomalyModel):
             pickle.dump(
                 {
                     "n_components": self.n_components,
+                    "feature_scaling": self.feature_scaling,
                     "feature_width": self.feature_width,
                     "pca": self.pca,
+                    "scaler": self.scaler,
                 },
                 file,
             )
@@ -84,8 +95,29 @@ class PCAModel(AnomalyModel):
         """Restore fitted PCA state from a trusted training artifact."""
         with path.open("rb") as file:
             payload = pickle.load(file)
-        model = cls({"n_components": payload["n_components"]}, logger)
+        model = cls(
+            {
+                "n_components": payload["n_components"],
+                "feature_scaling": payload["feature_scaling"],
+            },
+            logger,
+        )
         model.feature_width = payload["feature_width"]
         model.pca = payload["pca"]
+        model.scaler = payload["scaler"]
         logger.info(f"Loaded fitted PCA model: {path}")
         return model
+
+    def fit_scale(
+        self, features: Sequence[Sequence[float]]
+    ) -> Sequence[Sequence[float]]:
+        """Fit the configured train-only feature scaling transformation."""
+        if self.scaler is None:
+            return features
+        return self.scaler.fit_transform(features)
+
+    def scale(self, features: Sequence[Sequence[float]]) -> Sequence[Sequence[float]]:
+        """Apply the configured feature scaling transformation."""
+        if self.scaler is None:
+            return features
+        return self.scaler.transform(features)

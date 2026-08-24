@@ -1,3 +1,6 @@
 pca:
   module: mark_ad_benchmark.models.pca
   class: PCAModel
+robust_pca:
+  module: mark_ad_benchmark.models.robust_pca
+  class: RobustPCAModel
