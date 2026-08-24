@@ -57,6 +57,7 @@ def test_pca_training_and_testing_use_separate_artifacts(
                 "training": {"epochs": 1},
                 "threshold": {"name": "validation_f1"},
                 "selection": {"metric": "f1", "direction": "maximize"},
+                "metrics": metric_definition(),
             }
         )
     )
@@ -79,6 +80,9 @@ def test_pca_training_and_testing_use_separate_artifacts(
     ) == pytest.approx((1.0, 1.0, 1.0))
     assert (validated.run_dir / "model.pkl").is_file()
     assert (validated.run_dir / "validation_scores.csv").is_file()
+    assert json.loads((validated.run_dir / "metrics.json").read_text())["validation"][
+        "ranking"
+    ]["auc_roc"] == pytest.approx(1.0)
     assert (
         json.loads((validated.run_dir / "validation_history.json").read_text())[0][
             "epoch"
@@ -97,6 +101,9 @@ def test_pca_training_and_testing_use_separate_artifacts(
     assert (testing.run_dir / "test_scores.csv").is_file()
     assert (testing.run_dir / "metrics.json").is_file()
     assert (testing.run_dir / "manifest.json").is_file()
+    assert json.loads((testing.run_dir / "metrics.json").read_text())["test"]["event"][
+        "event_f1"
+    ] == pytest.approx(1.0)
 
 
 @pytest.mark.parametrize(
@@ -126,6 +133,7 @@ def test_experiment_rejects_unknown_model_or_protocol_before_loading_data(
                 "training": {"epochs": 1},
                 "threshold": {"name": "validation_f1"},
                 "selection": {"metric": "f1", "direction": "maximize"},
+                "metrics": metric_definition(),
             }
         )
     )
@@ -145,3 +153,10 @@ def write_split(path: Path, rows: tuple[tuple[int, int, int], ...]) -> None:
         for index, (feature_0, feature_1, label) in enumerate(rows, start=1)
     )
     path.write_text("\n".join(lines) + "\n")
+
+
+def metric_definition() -> dict[str, object]:
+    return {
+        "vus": {"max_window": 2, "threshold_samples": 3},
+        "range": {"recall_existence_weight": 0.2},
+    }

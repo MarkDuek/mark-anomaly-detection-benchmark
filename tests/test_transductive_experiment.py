@@ -62,6 +62,10 @@ def test_transductive_experiment_uses_validation_and_test_without_train(
                 "training": {"epochs": 1},
                 "threshold": {"name": "validation_f1"},
                 "selection": {"metric": "f1", "direction": "maximize"},
+                "metrics": {
+                    "vus": {"max_window": 2, "threshold_samples": 3},
+                    "range": {"recall_existence_weight": 0.2},
+                },
             }
         )
     )

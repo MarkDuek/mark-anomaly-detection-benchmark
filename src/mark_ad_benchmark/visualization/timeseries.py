@@ -97,6 +97,7 @@ def load_run_data(
     test_split, feature_names = datasets[dataset_id]
     scores = load_scores(test_run_dir / "test_scores.csv", test_split, logger)
     metrics = json.loads((test_run_dir / "metrics.json").read_text())
+    test_metrics = metrics["test"]
     indexes = display_indexes(test_split.labels)
     return {
         "experiment_id": test_manifest["experiment"]["id"],
@@ -104,7 +105,8 @@ def load_run_data(
         "labels": [test_split.labels[index] for index in indexes],
         "scores": [scores[index] for index in indexes],
         "threshold": metrics["threshold"],
-        "metrics": metrics["test"],
+        "metrics": test_metrics.get("point", test_metrics),
+        "metric_groups": test_metrics,
         "features": {
             feature_name: [
                 test_split.features[index][feature_index] for index in indexes
@@ -209,7 +211,7 @@ def dashboard_html(runs: dict[str, dict[str, object]]) -> str:
         {{x: run.timestamps, y: predictions, mode: "lines", line: {{shape: "hv"}}, name: "Prediction"}},
         {{x: anomalies.map(index => run.timestamps[index]), y: anomalies.map(() => 1), mode: "markers", marker: {{color: "red", size: 7}}, name: "True anomaly"}}
       ], {{title: "Prediction", hovermode: "x unified", yaxis: {{range: [-0.1, 1.1]}}}});
-      document.getElementById("summary").textContent = `${{run.experiment_id}}: threshold=${{run.threshold}}; precision=${{run.metrics.precision}}; recall=${{run.metrics.recall}}; f1=${{run.metrics.f1}}`;
+       document.getElementById("summary").textContent = `${{run.experiment_id}}: threshold=${{run.threshold}}; precision=${{run.metrics.precision}}; recall=${{run.metrics.recall}}; f1=${{run.metrics.f1}}; metrics=${{JSON.stringify(run.metric_groups)}}`;
     }}
     runSelector.addEventListener("change", () => {{ populateFeatures(); render(); }});
     featureSelector.addEventListener("change", render);

@@ -17,7 +17,8 @@ selection:
   metric: f1
   direction: maximize
 metrics:
-  point:
-  - precision
-  - recall
-  - f1
+  vus:
+    max_window: 100
+    threshold_samples: 250
+  range:
+    recall_existence_weight: 0.2

@@ -10,7 +10,13 @@ import yaml
 
 from mark_ad_benchmark.datasets.loader import DatasetSplit, load_refined_dataset
 from mark_ad_benchmark.logging import ComponentLogger
-from mark_ad_benchmark.metrics import PointMetrics, point_metrics
+from mark_ad_benchmark.metrics import (
+    EvaluationMetrics,
+    MetricSettings,
+    PointMetrics,
+    evaluate_metrics,
+    point_metrics,
+)
 from mark_ad_benchmark.models import InductiveAnomalyModel, TransductiveAnomalyModel
 
 
@@ -18,7 +24,7 @@ from mark_ad_benchmark.models import InductiveAnomalyModel, TransductiveAnomalyM
 class ValidationResult:
     epoch: int
     threshold: float
-    metrics: PointMetrics
+    metrics: EvaluationMetrics
     selection_value: float
     scores: tuple[float, ...]
     model_diagnostics: dict[str, object]
@@ -35,7 +41,7 @@ class ValidatedRun:
 class TestResult:
     run_dir: Path
     threshold: float
-    test_metrics: PointMetrics
+    test_metrics: EvaluationMetrics
 
 
 @dataclass(frozen=True)
@@ -215,10 +221,17 @@ class Experiment:
         metrics_logger = self.logger.for_component("mark_ad_benchmark.metrics.point")
         selector = self.threshold_type(self.logger.for_component(self.threshold_module))
         threshold = selector.fit(scores, protocol.validation.labels)
-        metrics = point_metrics(
+        point = point_metrics(
             protocol.validation.labels, scores, threshold, metrics_logger
         )
-        selection_value = getattr(metrics, self.definition["selection"]["metric"])
+        metrics = evaluate_metrics(
+            protocol.validation.labels,
+            scores,
+            threshold,
+            self.metric_settings(),
+            self.logger.for_component("mark_ad_benchmark.metrics.evaluation"),
+        )
+        selection_value = getattr(point, self.definition["selection"]["metric"])
         self.logger.info(
             f"Validated epoch {epoch}: {self.definition['selection']['metric']}={selection_value}"
         )
@@ -294,11 +307,18 @@ class Experiment:
                 model, test_split, self.logger.for_component(self.protocol_module)
             )
         threshold = validated_manifest["selected_threshold"]
-        metrics = point_metrics(
+        point_metrics(
             test_split.labels,
             scores,
             threshold,
             self.logger.for_component("mark_ad_benchmark.metrics.point"),
+        )
+        metrics = evaluate_metrics(
+            test_split.labels,
+            scores,
+            threshold,
+            self.metric_settings(),
+            self.logger.for_component("mark_ad_benchmark.metrics.evaluation"),
         )
         test_run_id = run_id or create_run_id(f"{self.definition['id']}-test")
         run_dir = self.runs_root / test_run_id
@@ -387,6 +407,7 @@ class Experiment:
             message = "Experiment selection.direction must be maximize or minimize"
             self.logger.error(message)
             raise ValueError(message)
+        self.metric_settings()
 
     def is_better(self, candidate: float, current: float) -> bool:
         """Compare validation values using the configured selection direction."""
@@ -440,6 +461,42 @@ class Experiment:
             {**parameters, **dict(zip(names, values, strict=True))}
             for values in product(*(candidates[name] for name in names))
         )
+
+    def metric_settings(self) -> MetricSettings:
+        """Read explicit range-metric settings from the experiment definition."""
+        metrics = self.definition.get("metrics")
+        if not isinstance(metrics, dict):
+            message = "Experiment metrics must be a mapping"
+            self.logger.error(message)
+            raise TypeError(message)
+        vus = metrics.get("vus")
+        range_settings = metrics.get("range")
+        if not isinstance(vus, dict) or not isinstance(range_settings, dict):
+            message = "Experiment metrics.vus and metrics.range must be mappings"
+            self.logger.error(message)
+            raise TypeError(message)
+        max_window = vus.get("max_window")
+        samples = vus.get("threshold_samples")
+        existence_weight = range_settings.get("recall_existence_weight")
+        if not isinstance(max_window, int) or max_window < 0:
+            message = "Experiment metrics.vus.max_window must be a nonnegative integer"
+            self.logger.error(message)
+            raise ValueError(message)
+        if not isinstance(samples, int) or samples < 1:
+            message = (
+                "Experiment metrics.vus.threshold_samples must be a positive integer"
+            )
+            self.logger.error(message)
+            raise ValueError(message)
+        if (
+            not isinstance(existence_weight, (int, float))
+            or isinstance(existence_weight, bool)
+            or not 0 <= existence_weight <= 1
+        ):
+            message = "Experiment metrics.range.recall_existence_weight must be between zero and one"
+            self.logger.error(message)
+            raise ValueError(message)
+        return MetricSettings(max_window, samples, float(existence_weight))
 
     def model_diagnostics(self, model: object) -> dict[str, object]:
         """Return batch-model diagnostics while preserving inductive artifacts."""
