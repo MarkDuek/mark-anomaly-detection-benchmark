@@ -22,6 +22,11 @@ def test_visualization_dashboard_embeds_saved_test_run(tmp_path: Path) -> None:
             {
                 "id": "example",
                 "files": {"test": "source/test.csv"},
+                "raw_schema": {
+                    "timestamp": "timestamp",
+                    "features": ["feature_0"],
+                    "label": "label",
+                },
                 "refined_schema": {
                     "timestamp": "timestamp",
                     "features": ["feature_0"],
@@ -71,6 +76,7 @@ def test_visualization_dashboard_embeds_saved_test_run(tmp_path: Path) -> None:
         manifest_root,
         tmp_path / "refined",
         runs_root,
+        tmp_path / "runs.json",
     )
 
     content = output_path.read_text()
@@ -81,6 +87,12 @@ def test_visualization_dashboard_embeds_saved_test_run(tmp_path: Path) -> None:
     assert 'id="metric-cards"' in content
     assert 'id="comparison-runs"' in content
     assert 'id="comparison-table"' in content
+    assert (tmp_path / "runs.json").is_file()
+    exported_run = json.loads((tmp_path / "runs.json").read_text())["test-run"]
+    assert exported_run["display_name"] == "Test Run"
+    assert exported_run["dataset_id"] == "example"
+    assert exported_run["run_time"] is None
+    assert exported_run["feature_labels"] == {"feature_0": "feature_0"}
 
 
 def test_visualization_sampling_retains_anomalies(

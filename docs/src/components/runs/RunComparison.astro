@@ -1,0 +1,52 @@
+<section class="run-comparison" aria-labelledby="comparison-heading">
+  <h2 id="comparison-heading">Compare runs</h2>
+  <p>Select a dataset, then choose experiment runs to compare. Open any selected run for its detailed signal view.</p>
+  <label class="dataset-picker">Dataset <select id="dataset-selector"></select></label>
+  <div id="comparison-options" class="comparison-options"></div>
+  <p id="comparison-status" class="run-status">Loading run data…</p>
+  <div class="comparison-scroll"><table id="comparison-table"></table></div>
+</section>
+
+<script>
+  const options = document.querySelector("#comparison-options");
+  const datasetSelector = document.querySelector("#dataset-selector");
+  const table = document.querySelector("#comparison-table");
+  const status = document.querySelector("#comparison-status");
+  let runs = {};
+  let sortColumn = null;
+  let sortDirection = 1;
+  const entries = (run) => Object.entries(run.metric_groups).flatMap(([group, metrics]) => typeof metrics === "object" && metrics !== null ? Object.entries(metrics).map(([name, metric]) => [`${group.replaceAll("_", " ")} ${name.replaceAll("_", " ")}`, metric]) : [[group.replaceAll("_", " "), metrics]]);
+  const value = (metric) => metric == null ? "N/A" : Number(metric).toFixed(4);
+  const formatDataset = (dataset) => dataset.replaceAll("-", " ").replace(/\b\w/g, (letter) => letter.toUpperCase());
+  const metricLabel = (name) => {
+    const groups = ["event affiliation", "event", "point", "ranking", "vus prediction", "vus ranking"];
+    const group = groups.find((candidate) => name.startsWith(candidate));
+    const measure = (group ? name.slice(group.length).trim() : name).replace("auc pr", "AUC-PR").replace("auc roc", "AUC-ROC").replace("f1", "F1");
+    return `${group || "Metric"}<br>${measure}`;
+  };
+  const render = () => {
+    const ids = [...options.querySelectorAll("input:checked")].map((input) => input.value);
+    table.replaceChildren();
+    if (!ids.length) { table.createCaption().textContent = "Select one or more runs to compare their metrics."; return; }
+    const metricNames = [...new Set(ids.flatMap((id) => entries(runs[id]).map(([name]) => name)))];
+    if (sortColumn === "run") ids.sort((left, right) => sortDirection * runs[left].display_name.localeCompare(runs[right].display_name));
+    if (metricNames.includes(sortColumn)) ids.sort((left, right) => {
+      const leftValue = Number(new Map(entries(runs[left])).get(sortColumn) ?? -Infinity);
+      const rightValue = Number(new Map(entries(runs[right])).get(sortColumn) ?? -Infinity);
+      return sortDirection * (leftValue - rightValue);
+    });
+    const header = document.createElement("tr");
+    const sortIndicator = (column) => sortColumn === column ? sortDirection === 1 ? " ↑" : " ↓" : "";
+    header.innerHTML = `<th><button type="button" data-sort="run">Run${sortIndicator("run")}</button></th>${metricNames.map((name) => `<th><button type="button" data-sort="${name}">${metricLabel(name)}${sortIndicator(name)}</button></th>`).join("")}`;
+    table.append(header);
+    const maximums = new Map(metricNames.map((name) => [name, Math.max(...ids.map((id) => Number(new Map(entries(runs[id])).get(name) ?? -Infinity)))]));
+    ids.forEach((id) => { const row = document.createElement("tr"); const metrics = new Map(entries(runs[id])); row.innerHTML = `<th><a href="${import.meta.env.BASE_URL}runs/explorer/?run=${encodeURIComponent(id)}">${runs[id].display_name}</a><small>${runs[id].run_time}<br>${id}</small></th>${metricNames.map((name) => { const metric = metrics.get(name); const formatted = value(metric); const isMaximum = metric != null && Number(metric) === maximums.get(name); return `<td>${isMaximum ? `<strong>${formatted}</strong>` : formatted}</td>`; }).join("")}`; table.append(row); });
+    table.querySelectorAll("[data-sort]").forEach((button) => button.addEventListener("click", () => { const column = button.dataset.sort; sortDirection = sortColumn === column ? -sortDirection : 1; sortColumn = column; render(); }));
+  };
+  const renderOptions = () => {
+    const datasetRuns = Object.entries(runs).filter(([, run]) => run.dataset_id === datasetSelector.value);
+    options.replaceChildren(...datasetRuns.map(([id, run], index) => { const label = document.createElement("label"); label.innerHTML = `<input type="checkbox" value="${id}" ${index < 2 ? "checked" : ""}> ${run.display_name}<small>${run.run_time}<br>${id}</small>`; label.querySelector("input").addEventListener("change", render); return label; }));
+    render();
+  };
+  fetch(`${import.meta.env.BASE_URL}runs.json`).then((response) => response.ok ? response.json() : Promise.reject()).then((data) => { runs = data; const datasets = [...new Set(Object.values(runs).map((run) => run.dataset_id))]; datasetSelector.replaceChildren(...datasets.map((dataset) => new Option(formatDataset(dataset), dataset))); datasetSelector.addEventListener("change", renderOptions); status.hidden = true; renderOptions(); }).catch(() => { status.textContent = "No generated run data is available. Run `make visualize` after creating test artifacts."; });
+</script>

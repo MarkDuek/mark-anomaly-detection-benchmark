@@ -1,0 +1,107 @@
+<section class="run-explorer" aria-labelledby="experiment-summary">
+  <div class="run-controls">
+    <label>Run <select id="run-selector"></select></label>
+    <details class="feature-selector"><summary>Features</summary><div id="feature-options"></div><button type="button" id="select-all">Select all</button><button type="button" id="clear-features">Clear</button></details>
+  </div>
+  <p id="run-status" class="run-status">Loading run data…</p>
+  <section id="selected-run" hidden>
+    <h2 id="experiment-summary">Experiment summary</h2>
+    <p><strong id="experiment-id"></strong><br /><code id="run-id"></code></p>
+    <div id="metric-summary" class="metric-summary"></div>
+    <div id="plot" aria-label="Synchronized experiment signals, anomaly score, prediction, and ground truth"></div>
+  </section>
+</section>
+
+<script>
+  const Plotly = (await import("plotly.js-dist-min")).default;
+
+  const selector = document.querySelector("#run-selector");
+  const featureOptions = document.querySelector("#feature-options");
+  const status = document.querySelector("#run-status");
+  const selectedRun = document.querySelector("#selected-run");
+  let runs = {};
+
+  const entries = (run) => Object.entries(run.metric_groups).flatMap(([group, metrics]) =>
+    typeof metrics === "object" && metrics !== null
+      ? Object.entries(metrics).map(([name, value]) => [`${group.replaceAll("_", " ")} ${name.replaceAll("_", " ")}`, value])
+      : [[group.replaceAll("_", " "), metrics]],
+  );
+  const value = (metric) => metric == null ? "N/A" : Number(metric).toFixed(4);
+  const activeFeatures = () => [...featureOptions.querySelectorAll("input:checked")].map((input) => input.value);
+  const rawFeatureName = (run, feature) => run.feature_labels[feature];
+  const featureLabel = (run, feature) => `${run.feature_labels[feature]} (${feature})`;
+  const snakeCase = (label) => label.replaceAll(" ", "_").replaceAll("-", "_").toLowerCase();
+  const featureAxisLabel = (run, feature) => `${snakeCase(rawFeatureName(run, feature))}<br>(${feature})`;
+  const intervals = (labels, timestamps) => labels.reduce((result, label, index) => {
+    if (label && !labels[index - 1]) result.push([timestamps[index], timestamps[index]]);
+    if (label) result.at(-1)[1] = timestamps[index];
+    return result;
+  }, []);
+
+  function renderMetrics(run) {
+    const summary = document.querySelector("#metric-summary");
+    const point = run.metric_groups.point || run.metrics;
+    const preferred = ["f1", "precision", "recall"].filter((name) => name in point);
+    summary.replaceChildren(...preferred.map((name) => {
+      const block = document.createElement("div");
+      block.innerHTML = `<small>${name.replaceAll("_", " ")}</small><strong>${value(point[name])}</strong>`;
+      return block;
+    }));
+  }
+
+  function renderPlot(run) {
+    const features = activeFeatures();
+    const rows = features.length + 3;
+    const navigatorAxis = rows + 1;
+    const axisId = (axis, index) => `${axis}${index === 1 ? "" : index}`;
+    const axis = (index, extra = {}) => ({ domain: [(rows - index) / rows + 0.012, (rows - index + 1) / rows - 0.012], showgrid: true, gridcolor: "#f1f5f9", linecolor: "#e5e7eb", tickfont: { color: "#6b7280", size: 11 }, ...extra });
+    const anomalyIndexes = run.labels.flatMap((label, index) => label ? [index] : []);
+    const traces = features.flatMap((feature, index) => [
+      { x: run.timestamps, y: run.features[feature], type: "scatter", mode: "lines", name: featureLabel(run, feature), showlegend: false, line: { color: "#4f46e5", width: 1.2 }, yaxis: axisId("y", index + 1) },
+      { x: anomalyIndexes.map((point) => run.timestamps[point]), y: anomalyIndexes.map((point) => run.features[feature][point]), type: "scatter", mode: "markers", name: "Ground-truth anomaly", showlegend: index === 0, hoverinfo: "skip", marker: { color: "#dc2626", size: 4 }, yaxis: axisId("y", index + 1) },
+    ]);
+    const scoreAxis = features.length + 1;
+    const predictions = run.scores.map((score) => Number(score >= run.threshold));
+    traces.push(
+      { x: run.timestamps, y: run.scores, type: "scatter", mode: "lines", name: "Anomaly score", line: { color: "#0f766e", width: 1.4 }, yaxis: axisId("y", scoreAxis) },
+      { x: [run.timestamps[0], run.timestamps.at(-1)], y: [run.threshold, run.threshold], type: "scatter", mode: "lines", name: `Threshold ${value(run.threshold)}`, hoverinfo: "skip", line: { color: "#d97706", dash: "dash" }, yaxis: axisId("y", scoreAxis) },
+      { x: run.timestamps, y: predictions, type: "scatter", mode: "lines", name: "Prediction", showlegend: false, line: { color: "#111827", shape: "hv" }, yaxis: axisId("y", scoreAxis + 1) },
+      { x: run.timestamps, y: run.labels, type: "scatter", mode: "lines", name: "Ground truth", showlegend: false, line: { color: "#dc2626", shape: "hv" }, yaxis: axisId("y", scoreAxis + 2) },
+      { x: run.timestamps, y: run.labels, type: "scatter", mode: "lines", name: "Ground-truth overview", showlegend: false, hoverinfo: "skip", line: { color: "#dc2626", shape: "hv", width: 1.2 }, xaxis: "x2", yaxis: axisId("y", navigatorAxis) },
+    );
+    const layout = { paper_bgcolor: "#ffffff", plot_bgcolor: "#ffffff", height: Math.min(2200, 520 + features.length * 180), margin: { l: 100, r: 20, t: 35, b: 65 }, hovermode: "x unified", hoversubplots: "axis", legend: { orientation: "h" }, xaxis: { anchor: axisId("y", rows), showgrid: false, showspikes: true, spikemode: "across", spikedash: "dot", spikecolor: "#374151", linecolor: "#e5e7eb" }, xaxis2: { anchor: axisId("y", navigatorAxis), domain: [0, 1], showticklabels: false, showgrid: false, rangeslider: { visible: true, thickness: 0.06 } }, shapes: intervals(run.labels, run.timestamps).map(([x0, x1]) => ({ type: "rect", xref: "x", yref: "paper", x0, x1, y0: 0, y1: 1, fillcolor: "rgba(220, 38, 38, 0.08)", line: { width: 0 } })) };
+    for (let index = 1; index <= rows; index++) {
+      const label = index <= features.length ? featureAxisLabel(run, features[index - 1]) : ["anomaly_score", "prediction", "ground_truth"][index - scoreAxis];
+      layout[`yaxis${index === 1 ? "" : index}`] = axis(index, { anchor: "x", title: { text: label, font: { size: 11 } }, ...(index > features.length ? { range: index > scoreAxis ? [-0.1, 1.1] : undefined } : {}) });
+    }
+    layout[`yaxis${navigatorAxis}`] = { domain: [0, 0.001], visible: false, fixedrange: true, range: [-0.1, 1.1] };
+    const plot = document.querySelector("#plot");
+    Plotly.react(plot, traces, layout, { responsive: true, displaylogo: false }).then(() => {
+      let synchronizing = false;
+      plot.removeAllListeners("plotly_relayout");
+      plot.on("plotly_relayout", (update) => {
+        if (synchronizing) return;
+        const range = (axis) => update[`${axis}.range`] || (update[`${axis}.range[0]`] !== undefined ? [update[`${axis}.range[0]`], update[`${axis}.range[1]`]] : null);
+        const navigatorRange = range("xaxis2");
+        const mainRange = range("xaxis");
+        const source = navigatorRange ? "xaxis2" : mainRange ? "xaxis" : null;
+        if (source === null) return;
+        synchronizing = true;
+        const target = source === "xaxis2" ? "xaxis" : "xaxis2";
+        const [start, end] = source === "xaxis2" ? navigatorRange : mainRange;
+        Plotly.relayout(plot, { [`${target}.range[0]`]: start, [`${target}.range[1]`]: end }).finally(() => { synchronizing = false; });
+      });
+    });
+  }
+
+  function renderRun() {
+    const id = selector.value; const run = runs[id];
+    document.querySelector("#experiment-id").textContent = run.display_name; document.querySelector("#run-id").textContent = `${run.run_time}  ${id}`;
+    featureOptions.replaceChildren(...Object.keys(run.features).map((feature, index) => { const label = document.createElement("label"); label.innerHTML = `<input type="checkbox" value="${feature}" ${index < 4 ? "checked" : ""}><span>${rawFeatureName(run, feature)} <small>(${feature})</small></span>`; label.querySelector("input").addEventListener("change", () => renderPlot(run)); return label; }));
+    renderMetrics(run); renderPlot(run);
+  }
+
+  document.querySelector("#select-all").addEventListener("click", () => { featureOptions.querySelectorAll("input").forEach((input) => input.checked = true); renderPlot(runs[selector.value]); });
+  document.querySelector("#clear-features").addEventListener("click", () => { featureOptions.querySelectorAll("input").forEach((input) => input.checked = false); renderPlot(runs[selector.value]); });
+  fetch(`${import.meta.env.BASE_URL}runs.json`).then((response) => response.ok ? response.json() : Promise.reject()).then((data) => { runs = data; selector.replaceChildren(...Object.entries(runs).map(([id, run]) => new Option(`${run.display_name} — ${run.run_time}`, id))); const requested = new URLSearchParams(window.location.search).get("run"); if (requested in runs) selector.value = requested; selector.addEventListener("change", renderRun); status.hidden = true; selectedRun.hidden = false; renderRun(); }).catch(() => { status.textContent = "No generated run data is available. Run `make visualize` after creating test artifacts."; });
+</script>

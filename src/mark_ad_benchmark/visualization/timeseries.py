@@ -1,6 +1,8 @@
 import csv
 import html
 import json
+import re
+from datetime import UTC, datetime
 from pathlib import Path
 
 import yaml
@@ -17,6 +19,7 @@ def visualize_runs(
     manifest_root: Path = Path("data/manifests"),
     refined_root: Path = Path("data/refined"),
     runs_root: Path = Path("runs"),
+    docs_output_path: Path = Path("docs/public/runs.json"),
 ) -> Path:
     """Write a browser dashboard for every saved test-run artifact."""
     test_run_ids = sorted(
@@ -26,7 +29,7 @@ def visualize_runs(
         message = f"No test artifacts found in {runs_root}"
         logger.error(message)
         raise FileNotFoundError(message)
-    datasets: dict[str, tuple[DatasetSplit, list[str]]] = {}
+    datasets: dict[str, tuple[DatasetSplit, list[str], list[str]]] = {}
     runs = {
         test_run_id: load_run_data(
             test_run_id,
@@ -40,6 +43,10 @@ def visualize_runs(
     }
     output_path = runs_root / "visualization.html"
     output_path.write_text(dashboard_html(runs), encoding="utf-8")
+    docs_output_path.parent.mkdir(parents=True, exist_ok=True)
+    docs_output_path.write_text(
+        json.dumps(runs, cls=PlotlyJSONEncoder), encoding="utf-8"
+    )
     logger.info(f"Wrote visualization dashboard: {output_path}")
     return output_path
 
@@ -70,7 +77,7 @@ def load_run_data(
     manifest_root: Path,
     refined_root: Path,
     runs_root: Path,
-    datasets: dict[str, tuple[DatasetSplit, list[str]]],
+    datasets: dict[str, tuple[DatasetSplit, list[str], list[str]]],
 ) -> dict[str, object]:
     test_run_dir = runs_root / test_run_id
     test_manifest = load_artifact_manifest(test_run_dir, "test", logger)
@@ -93,14 +100,19 @@ def load_run_data(
                 ("test",),
             )["test"],
             dataset_manifest["refined_schema"]["features"],
+            dataset_manifest["raw_schema"]["features"],
         )
-    test_split, feature_names = datasets[dataset_id]
+    test_split, feature_names, raw_feature_names = datasets[dataset_id]
     scores = load_scores(test_run_dir / "test_scores.csv", test_split, logger)
     metrics = json.loads((test_run_dir / "metrics.json").read_text())
     test_metrics = metrics["test"]
     indexes = display_indexes(test_split.labels)
     return {
         "experiment_id": test_manifest["experiment"]["id"],
+        "dataset_id": dataset_id,
+        "display_name": run_display_name(test_run_id),
+        "run_time": run_time(test_run_id),
+        "feature_labels": dict(zip(feature_names, raw_feature_names, strict=True)),
         "timestamps": [test_split.timestamps[index] for index in indexes],
         "labels": [test_split.labels[index] for index in indexes],
         "scores": [scores[index] for index in indexes],
@@ -114,6 +126,28 @@ def load_run_data(
             for feature_index, feature_name in enumerate(feature_names)
         },
     }
+
+
+def run_display_name(run_id: str) -> str:
+    """Format the experiment segment of a versioned run ID for display."""
+    experiment = re.sub(r"^\d{8}T\d{6}\d*Z-", "", run_id)
+    experiment = re.sub(r"-(validated|test)$", "", experiment)
+    return " ".join(
+        {"pca": "PCA", "robust": "Robust"}.get(word, word.title())
+        for word in experiment.replace("_", "-").split("-")
+    )
+
+
+def run_time(run_id: str) -> str | None:
+    """Extract the UTC creation time from a versioned run ID when present."""
+    match = re.match(r"^(\d{8}T\d{6})\d*Z-", run_id)
+    if match is None:
+        return None
+    return (
+        datetime.strptime(match.group(1), "%Y%m%dT%H%M%S")
+        .replace(tzinfo=UTC)
+        .strftime("%d %b %Y, %H:%M UTC")
+    )
 
 
 def load_artifact_manifest(
