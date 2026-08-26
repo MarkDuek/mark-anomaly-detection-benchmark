@@ -1,0 +1,95 @@
+---
+title: Point Metrics
+description: Pointwise anomaly-classification measures.
+---
+
+Point metrics evaluate every timestamp independently. They compare binary ground-truth labels with predictions obtained from anomaly scores at one fixed threshold.
+
+## Inputs
+
+For each timestamp $t$, the benchmark requires a binary label $y_t \in \{0, 1\}$ and a finite anomaly score $s_t$. Given threshold $\tau$, it predicts an anomaly when:
+
+$$
+\hat{y}_t = \begin{cases}
+1 & \text{if } s_t \geq \tau \\
+0 & \text{otherwise}
+\end{cases}
+$$
+
+The label and score sequences must have equal length. The threshold is selected on validation data and then kept fixed while evaluating test data.
+
+The implementation begins by counting true positives, false positives, and false negatives:
+
+```python
+# Reference implementation; keep this excerpt in sync with the source.
+def calculate_point_metrics(
+    labels: Sequence[int], scores: Sequence[float], threshold: float
+) -> PointMetrics:
+    true_positives = sum(
+        label == 1 and score >= threshold for label, score in zip(labels, scores)
+    )
+    false_positives = sum(
+        label == 0 and score >= threshold for label, score in zip(labels, scores)
+    )
+    false_negatives = sum(
+        label == 1 and score < threshold for label, score in zip(labels, scores)
+    )
+```
+
+## Precision
+
+Precision is the fraction of predicted anomalies that are true anomalies:
+
+$$
+\mathrm{precision} = \frac{TP}{TP + FP}
+$$
+
+It is `0.0` when the model predicts no anomalies.
+
+```python
+# Reference implementation; keep this excerpt in sync with the source.
+precision = (
+    true_positives / (true_positives + false_positives)
+    if true_positives + false_positives
+    else 0.0
+)
+```
+
+## Recall
+
+Recall is the fraction of labeled anomalies that the model detects:
+
+$$
+\mathrm{recall} = \frac{TP}{TP + FN}
+$$
+
+It is `0.0` when the series contains no labeled anomalies.
+
+```python
+# Reference implementation; keep this excerpt in sync with the source.
+recall = (
+    true_positives / (true_positives + false_negatives)
+    if true_positives + false_negatives
+    else 0.0
+)
+```
+
+## F1
+
+F1 is the harmonic mean of precision and recall:
+
+$$
+F_1 = \frac{2 \cdot \mathrm{precision} \cdot \mathrm{recall}}
+{\mathrm{precision} + \mathrm{recall}}
+$$
+
+It is `0.0` when both precision and recall are zero.
+
+```python
+# Reference implementation; keep this excerpt in sync with the source.
+f1 = 2 * precision * recall / (precision + recall) if precision + recall else 0.0
+```
+
+## Reference
+
+- Powers, David M. W. [*Evaluation: From Precision, Recall and F-Measure to ROC, Informedness, Markedness and Correlation*](https://www.researchgate.net/publication/228529307_Evaluation_From_Precision_Recall_and_F-Measure_to_ROC_Informedness_Markedness_Correlation), Journal of Machine Learning Technologies, 2011.

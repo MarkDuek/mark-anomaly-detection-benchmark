@@ -24,7 +24,18 @@ export default defineConfig({
         { label: "Protocols", link: "/protocols/" },
         { label: "Thresholds", link: "/thresholds/" },
         { label: "Datasets", link: "/datasets/" },
-        { label: "Metrics", link: "/metrics/" },
+        {
+          label: "Metrics",
+          items: [
+            { label: "Overview", link: "/metrics/" },
+            { label: "Point", link: "/metrics/point/" },
+            { label: "Events", link: "/metrics/events/" },
+            { label: "Ranking", link: "/metrics/ranking/" },
+            { label: "Affiliation", link: "/metrics/affiliation/" },
+            { label: "VUS", link: "/metrics/vus/" },
+            { label: "Evaluation", link: "/metrics/evaluation/" },
+          ],
+        },
         {
           label: "Runs",
           items: [
