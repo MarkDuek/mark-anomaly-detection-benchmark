@@ -78,6 +78,9 @@ def test_visualization_dashboard_embeds_saved_test_run(tmp_path: Path) -> None:
     assert "test-run" in content
     assert "Anomaly score" in content
     assert "Prediction" in content
+    assert 'id="metric-cards"' in content
+    assert 'id="comparison-runs"' in content
+    assert 'id="comparison-table"' in content
 
 
 def test_visualization_sampling_retains_anomalies(
