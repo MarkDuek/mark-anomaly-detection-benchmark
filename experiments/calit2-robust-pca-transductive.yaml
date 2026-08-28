@@ -5,7 +5,6 @@ model:
   parameters:
     tolerance: 1.0e-7
     max_iterations: 1000
-    score_norm: l1
   candidates:
     lambda:
     - 0.008

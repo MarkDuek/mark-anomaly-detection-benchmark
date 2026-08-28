@@ -1,6 +1,8 @@
 from collections.abc import Mapping, Sequence
 
 import numpy as np
+
+# 1. import StandardScaler dependency (documentation excerpt; keep synchronized)
 from sklearn.preprocessing import StandardScaler
 
 from mark_ad_benchmark.logging import ComponentLogger
@@ -13,14 +15,10 @@ class RobustPCAModel(TransductiveAnomalyModel):
     def __init__(
         self, parameters: Mapping[str, object], logger: ComponentLogger
     ) -> None:
+        # 2. configure Robust PCA solver parameters (documentation excerpt; keep synchronized)
         self.lambda_value = positive_float(parameters, "lambda", logger)
         self.tolerance = positive_float(parameters, "tolerance", logger)
         self.max_iterations = positive_int(parameters, "max_iterations", logger)
-        score_norm = parameters.get("score_norm")
-        if score_norm != "l1":
-            message = "Robust PCA score_norm must be l1"
-            logger.error(message)
-            raise ValueError(message)
         self.logger = logger
         self.low_rank_component: tuple[tuple[float, ...], ...] | None = None
         self.sparse_component: tuple[tuple[float, ...], ...] | None = None
@@ -42,7 +40,7 @@ class RobustPCAModel(TransductiveAnomalyModel):
             message = "Robust PCA requires finite feature values"
             self.logger.error(message)
             raise ValueError(message)
-        # 1. standardize the complete transductive feature batch (documentation excerpt; keep synchronized)
+        # 3. standardize the complete transductive feature batch (documentation excerpt; keep synchronized)
         matrix = StandardScaler().fit_transform(matrix)
         self.logger.info(
             f"Standardizing and decomposing {matrix.shape[0]} rows and {matrix.shape[1]} features with Robust PCA"
@@ -51,13 +49,13 @@ class RobustPCAModel(TransductiveAnomalyModel):
         if matrix_norm == 0.0:
             zeros = np.zeros_like(matrix)
             return self.finish(zeros, zeros, 0, 0.0, 0.0)
-        # 2. initialize augmented-Lagrangian solver state (documentation excerpt; keep synchronized)
+        # 4. initialize augmented-Lagrangian solver state (documentation excerpt; keep synchronized)
         mu = matrix.size / (4.0 * float(np.abs(matrix).sum()))
         low_rank = np.zeros_like(matrix)
         sparse = np.zeros_like(matrix)
         dual = np.zeros_like(matrix)
         convergence_threshold = self.tolerance * matrix_norm
-        # 3. alternate low-rank and sparse updates until convergence (documentation excerpt; keep synchronized)
+        # 5. alternate low-rank and sparse updates until convergence (documentation excerpt; keep synchronized)
         for iteration in range(1, self.max_iterations + 1):
             low_rank = singular_value_threshold(matrix - sparse + dual / mu, 1.0 / mu)
             sparse = soft_threshold(
@@ -87,7 +85,7 @@ class RobustPCAModel(TransductiveAnomalyModel):
     ) -> tuple[float, ...]:
         """Store one decomposition and return its timestamp anomaly scores."""
 
-        # 4. retain decomposition diagnostics and score sparse row magnitudes (documentation excerpt; keep synchronized)
+        # 6. retain decomposition diagnostics and score sparse row magnitudes (documentation excerpt; keep synchronized)
         self.low_rank_component = tuple(tuple(row) for row in low_rank.tolist())
         self.sparse_component = tuple(tuple(row) for row in sparse.tolist())
         self._diagnostics = {
