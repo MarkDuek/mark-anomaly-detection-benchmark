@@ -21,7 +21,7 @@ config/                         # runtime logging configuration
 data/
 ├── manifests/                  # dataset contracts and provenance records
 ├── raw/                        # source files validated after acquisition
-└── refined/                    # normalized benchmark splits ready for use
+└── refined/                    # refined benchmark splits ready for use
 docs/                           # documentation source and static-site tooling
 experiments/                    # reproducible experiment specifications
 src/mark_ad_benchmark/
