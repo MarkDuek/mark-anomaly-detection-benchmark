@@ -18,13 +18,13 @@ This repository uses [mTSBench](https://github.com/PLAN-Lab/mTSBench) and [TSB-A
 
 ```text
 config/                         # runtime logging configuration
-data/                           # local dataset artifacts and their contracts
+data/
 ├── manifests/                  # dataset contracts and provenance records
 ├── raw/                        # source files validated after acquisition
 └── refined/                    # normalized benchmark splits ready for use
 docs/                           # documentation source and static-site tooling
 experiments/                    # reproducible experiment specifications
-src/mark_ad_benchmark/          # benchmark implementation
+src/mark_ad_benchmark/
 ├── cli.py                      # command dispatch
 ├── experiment.py               # train, validation, and test orchestration
 ├── datasets/                   # data acquisition, refinement, and schema validation
