@@ -17,20 +17,20 @@ This repository uses [mTSBench](https://github.com/PLAN-Lab/mTSBench) and [TSB-A
 ## Current Architecture
 
 ```text
-config/                         logging policy and component catalogs
-data/manifests/                 versioned dataset provenance, schemas, and checksums
-docs/                           Astro/Starlight documentation site
-experiments/                    versioned dataset, model, protocol, and metric definitions
-src/mark_ad_benchmark/
+config/                         runtime logging configuration
+data/manifests/                 dataset contracts and provenance records
+docs/                           documentation source and static-site tooling
+experiments/                    reproducible experiment specifications
+src/mark_ad_benchmark/          benchmark implementation
 ├── cli.py                      command dispatch
 ├── experiment.py               train, validation, and test orchestration
-├── datasets/                   Hugging Face ingestion, refinement, and validated loading
-├── metrics/                    point, event, ranking, affiliation, VUS, and assembly metrics
-├── models/                     inductive PCA and transductive Robust PCA
-├── protocols/                  inductive and transductive data-use policies
-├── thresholds/                 validation-score threshold selection
-└── visualization/              interactive saved-run dashboard
-tests/                          deterministic unit and integration tests
+├── datasets/                   data acquisition, refinement, and schema validation
+├── metrics/                    benchmark metric calculation and assembly
+├── models/                     anomaly-score model implementations
+├── protocols/                  data-access policies for model execution
+├── thresholds/                 validation-based score-to-label calibration
+└── visualization/              saved-run exports for the documentation explorer
+tests/                          automated unit and integration coverage
 ```
 
 ## Requirements
