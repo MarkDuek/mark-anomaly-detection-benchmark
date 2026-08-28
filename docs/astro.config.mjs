@@ -20,6 +20,7 @@ export default defineConfig({
       ],
       sidebar: [
         { label: "Overview", link: "/" },
+        { label: "Usage", link: "/usage/" },
         {
           label: "Models",
           items: [

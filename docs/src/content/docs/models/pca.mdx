@@ -15,7 +15,11 @@ description: Train-scaled principal-component reconstruction residuals.
 PCA itself centers its input. With `standardize_features: true`, the benchmark additionally uses [scikit-learn's `StandardScaler`](https://scikit-learn.org/stable/modules/generated/sklearn.preprocessing.StandardScaler.html) to scale every feature using training-split statistics. The fitted scaler is then reused unchanged for validation and test rows.
 
 ```python
-# 1. configure PCA and optional train-fitted standardization (documentation excerpt; keep synchronized)
+# 1. import PCA and StandardScaler dependencies (documentation excerpt; keep synchronized)
+from sklearn.decomposition import PCA
+from sklearn.preprocessing import StandardScaler
+
+# 2. configure PCA and optional train-fitted standardization (documentation excerpt; keep synchronized)
 self.n_components = n_components
 self.standardize_features = standardize_features
 self.logger = logger
@@ -26,20 +30,18 @@ self.feature_width: int | None = None
 
 ## Fit
 
-The model rejects a component count equal to or greater than the feature width, because that would permit full-dimensional reconstruction. It fits the optional scaler and PCA estimator using only training features.
+The model optionally standardizes training features, then scikit-learn PCA centers the resulting matrix and retains `n_components` principal directions. `n_components` must be less than the feature width, preventing full-dimensional reconstruction.
 
-### Principal Components
-
-For the training matrix $X$, scikit-learn PCA first centers every feature by subtracting its training mean, producing $X_c$. It computes a singular value decomposition:
+For the fitted training matrix $X$, PCA centers each feature to produce $X_c$ and computes its singular value decomposition:
 
 $$
 X_c = U \Sigma V^\mathsf{T}
 $$
 
-The first $k$ rows of $V^\mathsf{T}$, where $k$ is `n_components`, form the retained principal directions. A feature row is projected onto those directions and reconstructed in the original feature space. Keeping fewer directions than the feature width forces the reconstruction to omit variation outside the learned low-dimensional subspace.
+The first `n_components` rows of $V^\mathsf{T}$ are the retained directions used to project and reconstruct later rows.
 
 ```python
-# 2. fit PCA on train-only scaled features (documentation excerpt; keep synchronized)
+# 3. fit PCA on train-only scaled features (documentation excerpt; keep synchronized)
 self.pca.fit(self.fit_scale(features))
 self.feature_width = feature_width
 ```
@@ -55,7 +57,7 @@ $$
 Here, $x$ is the scaled row. The model requires the same feature width used during fitting.
 
 ```python
-# 3. scale, reconstruct, and score each feature row (documentation excerpt; keep synchronized)
+# 4. scale, reconstruct, and score each feature row (documentation excerpt; keep synchronized)
 scaled = self.scale(features)
 reconstructed = self.pca.inverse_transform(self.pca.transform(scaled))
 scores = tuple(
@@ -71,7 +73,7 @@ scores = tuple(
 Validated inductive runs persist the fitted PCA estimator, optional fitted scaler, feature width, and configured parameters. The logger is deliberately not serialized; loading attaches the logger of the current process.
 
 ```python
-# 4. persist fitted PCA state without the process-specific logger (documentation excerpt; keep synchronized)
+# 5. persist fitted PCA state without the process-specific logger (documentation excerpt; keep synchronized)
 pickle.dump(
     {
         "n_components": self.n_components,
@@ -85,7 +87,7 @@ pickle.dump(
 ```
 
 ```python
-# 5. restore fitted PCA state with the current process logger (documentation excerpt; keep synchronized)
+# 6. restore fitted PCA state with the current process logger (documentation excerpt; keep synchronized)
 model = cls(
     {
         "n_components": payload["n_components"],

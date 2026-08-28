@@ -71,6 +71,10 @@ starlight-theme-select {
   font-weight: 600;
 }
 
+.sl-anchor-link {
+  display: none;
+}
+
 :where(.sl-markdown-content) :not(pre) > code {
   background: var(--surface);
   border: 1px solid var(--border);
