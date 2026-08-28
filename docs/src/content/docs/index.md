@@ -1,5 +1,5 @@
 ---
-title: Multivariate Anomaly Detection
+title: "Mark's Multivariate Anomaly Detection Benchmark"
 description: A benchmark-oriented workspace for evaluating anomaly-detection methods on multivariate time-series data.
 ---
 
@@ -19,23 +19,3 @@ The benchmark is organized around the components needed to make experiments legi
   <a href="/metrics/"><strong>Metrics</strong><span>Measures used to assess results.</span></a>
   <a href="/runs/"><strong>Runs</strong><span>Experiment records and future visual analysis.</span></a>
 </div>
-
-## Notation Preview
-
-Mathematical notation is available throughout the documentation. For example, the familiar F-score can be written as $F_1$:
-
-$$
-F_1 = 2 \frac{\mathrm{precision}\,\mathrm{recall}}
-{\mathrm{precision}+\mathrm{recall}}
-$$
-
-## Reference Styling
-
-| Field | Example | Purpose |
-| --- | ---: | --- |
-| `run_id` | `calit2-pca-inductive` | Experiment identifier |
-| `metric` | $F_1$ | Evaluation label |
-
-```text
-experiment: calit2-pca-inductive
-```

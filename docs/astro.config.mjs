@@ -8,7 +8,7 @@ import remarkMath from "remark-math";
 export default defineConfig({
   integrations: [
     starlight({
-      title: "Multivariate Anomaly Detection",
+      title: "Mark's Multivariate Anomaly Detection Benchmark",
       description:
         "A benchmark-oriented workspace for multivariate time-series anomaly detection.",
       social: [
@@ -71,6 +71,7 @@ export default defineConfig({
           ],
         },
       ],
+      pagination: false,
       customCss: ["./src/styles/custom.css"],
     }),
     mdx(),
