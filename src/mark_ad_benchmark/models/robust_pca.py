@@ -1,9 +1,11 @@
+import sys
 from collections.abc import Mapping, Sequence
 
 import numpy as np
 
 # 1. import StandardScaler dependency (documentation excerpt; keep synchronized)
 from sklearn.preprocessing import StandardScaler
+from tqdm import tqdm
 
 from mark_ad_benchmark.logging import ComponentLogger
 from mark_ad_benchmark.models.base import TransductiveAnomalyModel
@@ -56,24 +58,34 @@ class RobustPCAModel(TransductiveAnomalyModel):
         dual = np.zeros_like(matrix)
         convergence_threshold = self.tolerance * matrix_norm
         # 5. alternate low-rank and sparse updates until convergence (documentation excerpt; keep synchronized)
-        for iteration in range(1, self.max_iterations + 1):
-            low_rank = singular_value_threshold(matrix - sparse + dual / mu, 1.0 / mu)
-            sparse = soft_threshold(
-                matrix - low_rank + dual / mu, self.lambda_value / mu
-            )
-            residual_matrix = matrix - low_rank - sparse
-            residual = float(np.linalg.norm(residual_matrix, ord="fro"))
-            dual += mu * residual_matrix
-            if residual <= convergence_threshold:
-                return self.finish(
-                    low_rank, sparse, iteration, residual, convergence_threshold
+        with tqdm(
+            total=self.max_iterations,
+            desc="Robust PCA",
+            unit="iteration",
+            leave=False,
+            disable=not sys.stderr.isatty(),
+        ) as progress:
+            for iteration in range(1, self.max_iterations + 1):
+                low_rank = singular_value_threshold(
+                    matrix - sparse + dual / mu, 1.0 / mu
                 )
-        message = (
-            "Robust PCA did not converge within "
-            f"{self.max_iterations} iterations; residual={residual}"
-        )
-        self.logger.error(message)
-        raise RuntimeError(message)
+                sparse = soft_threshold(
+                    matrix - low_rank + dual / mu, self.lambda_value / mu
+                )
+                residual_matrix = matrix - low_rank - sparse
+                residual = float(np.linalg.norm(residual_matrix, ord="fro"))
+                dual += mu * residual_matrix
+                progress.update()
+                if residual <= convergence_threshold:
+                    return self.finish(
+                        low_rank, sparse, iteration, residual, convergence_threshold
+                    )
+            message = (
+                "Robust PCA did not converge within "
+                f"{self.max_iterations} iterations; residual={residual}"
+            )
+            self.logger.error(message)
+            raise RuntimeError(message)
 
     def finish(
         self,

@@ -1,16 +1,21 @@
-id: creditcard-robust-pca-transductive
+id: creditcard-pca-inductive-validation-f1
 dataset: creditcard
 model:
-  name: robust_pca
+  name: pca
   parameters:
-    tolerance: 1.0e-5
-    max_iterations: 1000
+    n_components: 5
   candidates:
-    lambda:
-    - 0.002
-    - 0.00419
-    - 0.008
-protocol: transductive
+    n_components:
+    - 1
+    - 2
+    - 3
+    - 5
+    - 8
+    - 13
+    standardize_features:
+    - false
+    - true
+protocol: inductive
 training:
   epochs: 1
 threshold:

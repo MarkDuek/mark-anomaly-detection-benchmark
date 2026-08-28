@@ -42,6 +42,10 @@ export default defineConfig({
           items: [
             { label: "Overview", link: "/thresholds/" },
             { label: "Validation F1", link: "/thresholds/validation-f1/" },
+            {
+              label: "Validation F1 Quantile",
+              link: "/thresholds/validation-f1-quantile/",
+            },
           ],
         },
         {

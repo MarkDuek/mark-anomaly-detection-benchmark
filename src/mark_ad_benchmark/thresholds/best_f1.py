@@ -1,5 +1,5 @@
 import math
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 
 from mark_ad_benchmark.logging import ComponentLogger
 from mark_ad_benchmark.thresholds.base import ThresholdSelector
@@ -10,6 +10,7 @@ class BestF1ThresholdSelector(ThresholdSelector):
 
     def __init__(self, logger: ComponentLogger) -> None:
         self.logger = logger
+        self.selected_threshold: float | None = None
 
     def fit(self, scores: Sequence[float], labels: Sequence[int]) -> float:
         """Select a threshold using labeled validation scores."""
@@ -57,7 +58,29 @@ class BestF1ThresholdSelector(ThresholdSelector):
                 best_f1 = f1
                 best_threshold = threshold
         self.logger.info(f"Selected validation F1 threshold: {best_threshold}")
+        self.selected_threshold = best_threshold
         return best_threshold
+
+    def threshold_for(self, scores: Sequence[float]) -> float:
+        """Reuse the fitted validation threshold for future score sequences."""
+        if self.selected_threshold is None:
+            message = "Validation F1 threshold must be fitted before use"
+            self.logger.error(message)
+            raise ValueError(message)
+        return self.selected_threshold
+
+    def state(self) -> dict[str, object]:
+        """Persist the fixed validation threshold."""
+        return {"threshold": self.threshold_for(())}
+
+    def load_state(self, state: Mapping[str, object]) -> None:
+        """Restore the fixed validation threshold."""
+        threshold = state.get("threshold")
+        if not isinstance(threshold, (int, float)) or isinstance(threshold, bool):
+            message = "Validation F1 threshold state must contain a numeric threshold"
+            self.logger.error(message)
+            raise TypeError(message)
+        self.selected_threshold = float(threshold)
 
 
 def validate_inputs(

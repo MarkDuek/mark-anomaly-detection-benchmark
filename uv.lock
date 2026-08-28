@@ -500,6 +500,7 @@ dependencies = [
     { name = "plotly" },
     { name = "pyyaml" },
     { name = "scikit-learn" },
+    { name = "tqdm" },
     { name = "vus" },
 ]
 
@@ -516,6 +517,7 @@ requires-dist = [
     { name = "plotly", specifier = ">=6.9.0" },
     { name = "pyyaml", specifier = ">=6.0.3" },
     { name = "scikit-learn", specifier = ">=1.9.0" },
+    { name = "tqdm", specifier = ">=4.67.1" },
     { name = "vus", specifier = "==0.0.6" },
 ]
 

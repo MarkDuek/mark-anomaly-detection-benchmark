@@ -23,7 +23,9 @@ def main(argv: list[str] | None = None) -> None:
     logger = Logger.from_config(Path("config/logging.yaml"), ConsoleOutput())
     component_logger = logger.for_component(__name__)
     if args.command == "visualize":
-        component_logger.info("Writing visualization dashboard")
+        component_logger.info(
+            "Exporting saved test-run data for the documentation explorer"
+        )
         visualize_runs(
             component_logger.for_component(
                 "mark_ad_benchmark.visualization.timeseries"

@@ -6,11 +6,11 @@ import yaml
 
 from mark_ad_benchmark.datasets.ingest import sha256
 from mark_ad_benchmark.experiment import Experiment
-from mark_ad_benchmark.logging import Logger
+from mark_ad_benchmark.logging import ConsoleOutput, Logger
 
 
 def test_pca_training_and_testing_use_separate_artifacts(
-    tmp_path: Path,
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
     refined_dir = tmp_path / "refined" / "example"
     refined_dir.mkdir(parents=True)
@@ -64,14 +64,24 @@ def test_pca_training_and_testing_use_separate_artifacts(
 
     experiment = Experiment.from_path(
         experiment_path,
-        Logger().for_component("mark_ad_benchmark.experiment"),
+        Logger(ConsoleOutput()).for_component("mark_ad_benchmark.experiment"),
         manifest_root=manifest_root,
         refined_root=tmp_path / "refined",
         runs_root=tmp_path / "runs",
     )
     validated = experiment.train("validated-run")
+    output = capsys.readouterr().out
 
     assert validated.validation.epoch == 1
+    assert (
+        "[INFO] ==================== TRAINING AND VALIDATION ===================="
+        in output
+    )
+    assert "[INFO] Loading training and validation data" in output
+    assert "[INFO] Training candidate 1/1, epoch 1/1:" in output
+    assert "[INFO] Validating 1 parameter candidate across 1 epoch" in output
+    assert "[INFO] Validating candidate 1/1, epoch 1/1:" in output
+    assert "[INFO] Completed validation phase:" in output
     assert validated.validation.threshold == pytest.approx(3**0.5)
     assert (
         validated.validation.metrics.precision,
@@ -91,8 +101,13 @@ def test_pca_training_and_testing_use_separate_artifacts(
     )
 
     testing = experiment.test("validated-run", "test-run")
+    output = capsys.readouterr().out
 
     assert testing.threshold == validated.validation.threshold
+    assert "[INFO] ========================= TEST =========================" in output
+    assert "[INFO] Loading test data" in output
+    assert "[INFO] Scoring test data with selected validation configuration:" in output
+    assert "[INFO] Completed test phase:" in output
     assert (
         testing.test_metrics.precision,
         testing.test_metrics.recall,

@@ -114,6 +114,7 @@ for iteration in range(1, self.max_iterations + 1):
     residual_matrix = matrix - low_rank - sparse
     residual = float(np.linalg.norm(residual_matrix, ord="fro"))
     dual += mu * residual_matrix
+    progress.update()
     if residual <= convergence_threshold:
         return self.finish(
             low_rank, sparse, iteration, residual, convergence_threshold

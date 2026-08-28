@@ -8,6 +8,10 @@
     <h2 id="experiment-summary">Experiment summary</h2>
     <p><strong id="experiment-id"></strong><br /><code id="run-id"></code></p>
     <div id="metric-summary" class="metric-summary"></div>
+    <section class="run-configuration" aria-labelledby="configuration-heading">
+      <h3 id="configuration-heading">Run configuration</h3>
+      <table><tbody id="configuration-details"></tbody></table>
+    </section>
     <div id="plot" aria-label="Synchronized experiment signals, anomaly score, prediction, and ground truth"></div>
   </section>
 </section>
@@ -19,6 +23,7 @@
   const featureOptions = document.querySelector("#feature-options");
   const status = document.querySelector("#run-status");
   const selectedRun = document.querySelector("#selected-run");
+  const configurationDetails = document.querySelector("#configuration-details");
   let runs = {};
 
   const entries = (run) => Object.entries(run.metric_groups).flatMap(([group, metrics]) =>
@@ -41,11 +46,40 @@
   function renderMetrics(run) {
     const summary = document.querySelector("#metric-summary");
     const point = run.metric_groups.point || run.metrics;
-    const preferred = ["f1", "precision", "recall"].filter((name) => name in point);
+    const values = { threshold: run.threshold, ...point };
+    const preferred = ["threshold", "f1", "precision", "recall"].filter((name) => name in values);
     summary.replaceChildren(...preferred.map((name) => {
       const block = document.createElement("div");
-      block.innerHTML = `<small>${name.replaceAll("_", " ")}</small><strong>${value(point[name])}</strong>`;
+      block.innerHTML = `<small>${name.replaceAll("_", " ")}</small><strong>${value(values[name])}</strong>`;
       return block;
+    }));
+  }
+
+  function renderConfiguration(run) {
+    const configuration = run.configuration || {};
+    const formatConfiguration = (item) => typeof item === "number" ? value(item) : typeof item === "string" ? item : JSON.stringify(item);
+    const details = [
+      ["Model", configuration.model],
+      ["Protocol", configuration.protocol],
+      ["Configured parameters", configuration.configured_parameters],
+      ["Candidates", configuration.candidates],
+      ["Selected parameters", configuration.selected_parameters],
+      ["Threshold selector", configuration.threshold_selector],
+      ["Validation threshold", configuration.validation_threshold],
+      ["Test threshold", run.threshold],
+      ["Threshold calibration", configuration.threshold_calibration],
+      ["Selection", configuration.selection],
+      ["Test diagnostics", configuration.model_diagnostics],
+    ].filter(([, item]) => item != null && (typeof item !== "object" || Object.keys(item).length));
+    configurationDetails.replaceChildren(...details.map(([label, item]) => {
+      const row = document.createElement("tr");
+      const heading = document.createElement("th");
+      heading.scope = "row";
+      heading.textContent = label;
+      const detail = document.createElement("td");
+      detail.textContent = formatConfiguration(item);
+      row.append(heading, detail);
+      return row;
     }));
   }
 
@@ -98,7 +132,7 @@
     const id = selector.value; const run = runs[id];
     document.querySelector("#experiment-id").textContent = run.display_name; document.querySelector("#run-id").textContent = `${run.run_time}  ${id}`;
     featureOptions.replaceChildren(...Object.keys(run.features).map((feature, index) => { const label = document.createElement("label"); label.innerHTML = `<input type="checkbox" value="${feature}" ${index < 4 ? "checked" : ""}><span>${rawFeatureName(run, feature)} <small>(${feature})</small></span>`; label.querySelector("input").addEventListener("change", () => renderPlot(run)); return label; }));
-    renderMetrics(run); renderPlot(run);
+    renderMetrics(run); renderConfiguration(run); renderPlot(run);
   }
 
   document.querySelector("#select-all").addEventListener("click", () => { featureOptions.querySelectorAll("input").forEach((input) => input.checked = true); renderPlot(runs[selector.value]); });

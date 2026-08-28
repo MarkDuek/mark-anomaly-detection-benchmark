@@ -58,7 +58,7 @@ Training evaluates every configured parameter candidate on validation data, sele
 make evaluate EXPERIMENT=calit2-pca-inductive VALIDATED_RUN=<validated-run-id>
 ```
 
-Testing reuses the selected validation threshold without using test labels to choose it. Inductive models restore the selected fitted model; transductive models instantiate a new model and fit/score the complete test feature batch according to their protocol.
+Testing applies the selector calibration without using test labels. Fixed selectors reuse their numeric validation threshold, while adaptive selectors derive a test threshold from persisted validation calibration and test scores. Inductive models restore the selected fitted model; transductive models instantiate a new model and fit/score the complete test feature batch according to their protocol.
 
 Run both phases together:
 

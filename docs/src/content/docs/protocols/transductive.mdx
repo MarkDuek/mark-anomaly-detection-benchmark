@@ -29,7 +29,7 @@ Validation fits and scores the same complete validation batch. The resulting sco
 return model.fit_score(self.validation.features)
 ```
 
-The test lifecycle creates a new model and fits it only on the test batch. This model is independent of the model used for validation; the selected validation threshold remains fixed.
+The test lifecycle creates a new model and fits it only on the test batch. This model is independent of the model used for validation. Fixed selectors reuse their validation threshold; adaptive selectors such as [`validation_f1_quantile`](/thresholds/validation-f1-quantile/) derive a label-free test threshold from persisted validation calibration.
 
 ```python
 # 3. fit and score the test batch independently (documentation excerpt; keep synchronized)

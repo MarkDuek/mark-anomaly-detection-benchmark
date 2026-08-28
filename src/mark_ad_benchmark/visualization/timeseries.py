@@ -29,8 +29,12 @@ def visualize_runs(
         logger.error(message)
         raise FileNotFoundError(message)
     datasets: dict[str, tuple[DatasetSplit, list[str], list[str]]] = {}
-    runs = {
-        test_run_id: load_run_data(
+    run_label = "run" if len(test_run_ids) == 1 else "runs"
+    logger.info(f"Exporting {len(test_run_ids)} saved test {run_label}")
+    runs: dict[str, dict[str, object]] = {}
+    for index, test_run_id in enumerate(test_run_ids, start=1):
+        logger.info(f"Exporting test run {index}/{len(test_run_ids)}: {test_run_id}")
+        runs[test_run_id] = load_run_data(
             test_run_id,
             logger,
             manifest_root,
@@ -38,13 +42,13 @@ def visualize_runs(
             runs_root,
             datasets,
         )
-        for test_run_id in test_run_ids
-    }
     docs_output_path.parent.mkdir(parents=True, exist_ok=True)
     docs_output_path.write_text(
         json.dumps(runs, cls=PlotlyJSONEncoder), encoding="utf-8"
     )
-    logger.info(f"Wrote documentation run data: {docs_output_path}")
+    logger.info(
+        f"Wrote documentation run data for {len(runs)} test {run_label}: {docs_output_path}"
+    )
     return docs_output_path
 
 
@@ -103,9 +107,11 @@ def load_run_data(
     scores = load_scores(test_run_dir / "test_scores.csv", test_split, logger)
     metrics = json.loads((test_run_dir / "metrics.json").read_text())
     test_metrics = metrics["test"]
+    experiment = test_manifest["experiment"]
+    model = experiment.get("model", {})
     indexes = display_indexes(test_split.labels)
     return {
-        "experiment_id": test_manifest["experiment"]["id"],
+        "experiment_id": experiment["id"],
         "dataset_id": dataset_id,
         "display_name": run_display_name(test_run_id),
         "run_time": run_time(test_run_id),
@@ -116,6 +122,18 @@ def load_run_data(
         "threshold": metrics["threshold"],
         "metrics": test_metrics.get("point", test_metrics),
         "metric_groups": test_metrics,
+        "configuration": {
+            "model": model.get("name"),
+            "configured_parameters": model.get("parameters", {}),
+            "candidates": model.get("candidates", {}),
+            "selected_parameters": test_manifest.get("selected_model_parameters", {}),
+            "protocol": experiment.get("protocol"),
+            "threshold_selector": experiment.get("threshold", {}).get("name"),
+            "validation_threshold": validated_manifest.get("selected_threshold"),
+            "threshold_calibration": validated_manifest.get("threshold_state", {}),
+            "selection": experiment.get("selection", {}),
+            "model_diagnostics": metrics.get("model_diagnostics", {}),
+        },
         "features": {
             feature_name: [
                 test_split.features[index][feature_index] for index in indexes

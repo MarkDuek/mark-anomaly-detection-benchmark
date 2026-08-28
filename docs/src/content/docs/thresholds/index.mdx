@@ -3,7 +3,7 @@ title: Thresholds
 description: Rules for converting anomaly scores into binary decisions.
 ---
 
-Thresholds convert higher-is-more-anomalous scores into binary predictions. The experiment runner selects a threshold from labeled validation scores, records it in the validated run artifact, and applies that same value to test scores.
+Thresholds convert higher-is-more-anomalous scores into binary predictions. The experiment runner calibrates each selector from labeled validation scores, records its calibration state in the validated run artifact, then derives a test threshold without using test labels.
 
 ## Prediction Rule
 
@@ -21,13 +21,14 @@ The threshold affects point, event, affiliation, and prediction-based VUS metric
 ## Lifecycle
 
 1. A protocol produces validation scores.
-2. The configured selector uses validation scores and labels to select $\tau$.
-3. The experiment records $\tau$ with the selected validation artifact.
+2. The configured selector uses validation scores and labels to select $\tau$ and fit any required calibration state.
+3. The experiment records $\tau$ and calibration state with the selected validation artifact.
 4. A protocol produces test scores.
-5. The evaluator applies the recorded $\tau$ to test scores without using test labels to select it.
+5. The selector derives an effective test threshold from its calibration state and the test scores, without using test labels.
 
 ## Available Selectors
 
 | Selector | Objective | Tie rule |
 | --- | --- | --- |
-| [Validation F1](/thresholds/validation-f1/) | Maximize point F1 over validation-score thresholds | Keep the highest threshold among equal F1 values. |
+| [Validation F1](/thresholds/validation-f1/) | Maximize point F1 over validation-score thresholds | Reuse the selected numeric threshold. |
+| [Validation F1 Quantile](/thresholds/validation-f1-quantile/) | Maximize validation F1, then preserve its predicted-score fraction | Derive a label-free test quantile threshold. |

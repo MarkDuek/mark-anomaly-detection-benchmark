@@ -1,5 +1,6 @@
 import csv
 import json
+import sys
 from dataclasses import asdict, dataclass
 from datetime import UTC, datetime
 from importlib import import_module
@@ -7,6 +8,7 @@ from itertools import product
 from pathlib import Path
 
 import yaml
+from tqdm import tqdm
 
 from mark_ad_benchmark.datasets.loader import DatasetSplit, load_refined_dataset
 from mark_ad_benchmark.logging import ComponentLogger
@@ -24,6 +26,7 @@ from mark_ad_benchmark.models import InductiveAnomalyModel, TransductiveAnomalyM
 class ValidationResult:
     epoch: int
     threshold: float
+    threshold_state: dict[str, object]
     metrics: EvaluationMetrics
     selection_value: float
     scores: tuple[float, ...]
@@ -92,6 +95,17 @@ class Experiment:
 
     def train(self, run_id: str | None = None) -> ValidatedRun:
         """Train and validate every epoch, then persist the selected model."""
+        phase = (
+            "TRAINING AND VALIDATION"
+            if self.execution_mode == "inductive"
+            else "VALIDATION"
+        )
+        self.logger.info(f"==================== {phase} ====================")
+        self.logger.info(
+            "Loading training and validation data"
+            if self.execution_mode == "inductive"
+            else "Loading validation data"
+        )
         manifest_path, dataset_manifest = self.load_dataset_manifest()
 
         # 1. load refined dataset splits
@@ -115,30 +129,52 @@ class Experiment:
         history: list[dict[str, object]] = []
 
         # 4. validate every configured model parameter candidate
-        for parameters in self.model_parameter_candidates():
-            model = self.create_model(parameters)
-            for epoch in range(1, self.definition["training"]["epochs"] + 1):
-                self.logger.info(f"Validating epoch {epoch}: parameters={parameters}")
-
-                if self.execution_mode == "inductive":
-                    protocol.fit(model)
-                validation = self.validate(model, protocol, epoch, parameters)
-                history.append(
-                    {
-                        "epoch": epoch,
-                        "model_parameters": validation.model_parameters,
-                        "threshold": validation.threshold,
-                        "metrics": asdict(validation.metrics),
-                        "selection_value": validation.selection_value,
-                        "model_diagnostics": validation.model_diagnostics,
-                    }
-                )
-                if best_validation is None or self.is_better(
-                    validation.selection_value, best_validation.selection_value
-                ):
+        parameter_candidates = self.model_parameter_candidates()
+        epochs = self.definition["training"]["epochs"]
+        candidate_label = (
+            "candidate" if len(parameter_candidates) == 1 else "candidates"
+        )
+        epoch_label = "epoch" if epochs == 1 else "epochs"
+        self.logger.info(
+            f"Validating {len(parameter_candidates)} parameter {candidate_label} across {epochs} {epoch_label}"
+        )
+        with tqdm(
+            total=len(parameter_candidates),
+            desc="Validation candidates",
+            unit="candidate",
+            disable=not sys.stderr.isatty(),
+        ) as progress:
+            for candidate_index, parameters in enumerate(parameter_candidates, start=1):
+                model = self.create_model(parameters)
+                for epoch in range(1, epochs + 1):
+                    candidate_message = (
+                        f"candidate {candidate_index}/{len(parameter_candidates)}, "
+                        f"epoch {epoch}/{epochs}: parameters={parameters}"
+                    )
                     if self.execution_mode == "inductive":
-                        model.save(checkpoint_path)
-                    best_validation = validation
+                        self.logger.info(f"Training {candidate_message}")
+                        protocol.fit(model)
+                    self.logger.info(f"Validating {candidate_message}")
+
+                    validation = self.validate(model, protocol, epoch, parameters)
+                    history.append(
+                        {
+                            "epoch": epoch,
+                            "model_parameters": validation.model_parameters,
+                            "threshold": validation.threshold,
+                            "threshold_state": validation.threshold_state,
+                            "metrics": asdict(validation.metrics),
+                            "selection_value": validation.selection_value,
+                            "model_diagnostics": validation.model_diagnostics,
+                        }
+                    )
+                    if best_validation is None or self.is_better(
+                        validation.selection_value, best_validation.selection_value
+                    ):
+                        if self.execution_mode == "inductive":
+                            model.save(checkpoint_path)
+                        best_validation = validation
+                progress.update()
 
         if best_validation is None:
             message = "Experiment training did not produce validation results"
@@ -194,6 +230,7 @@ class Experiment:
                 ),
                 "selected_epoch": best_validation.epoch,
                 "selected_threshold": best_validation.threshold,
+                "threshold_state": best_validation.threshold_state,
                 "selected_model_parameters": best_validation.model_parameters,
                 "selection": self.definition["selection"],
                 "selection_value": best_validation.selection_value,
@@ -201,7 +238,7 @@ class Experiment:
             },
         )
         self.logger.info(
-            f"Completed training: {self.definition['selection']['metric']}={best_validation.selection_value}, parameters={best_validation.model_parameters}, run_dir={run_dir}"
+            f"Completed validation phase: {self.definition['selection']['metric']}={best_validation.selection_value}, parameters={best_validation.model_parameters}, run_dir={run_dir}"
         )
         return ValidatedRun(run_dir, best_validation)
 
@@ -238,6 +275,7 @@ class Experiment:
         return ValidationResult(
             epoch,
             threshold,
+            selector.state(),
             metrics,
             selection_value,
             scores,
@@ -247,6 +285,7 @@ class Experiment:
 
     def test(self, validated_run_id: str, run_id: str | None = None) -> TestResult:
         """Evaluate a validated artifact using its protocol's test lifecycle."""
+        self.logger.info("========================= TEST =========================")
         validated_dir = self.runs_root / validated_run_id
         manifest_path = validated_dir / "manifest.json"
         if not manifest_path.is_file():
@@ -279,6 +318,7 @@ class Experiment:
             self.logger.error(message)
             raise ValueError(message)
 
+        self.logger.info("Loading test data")
         dataset_path, dataset_manifest = self.load_dataset_manifest()
         if validated_manifest["dataset_manifest"] != dataset_manifest:
             message = "Validated artifact does not match the dataset manifest"
@@ -298,6 +338,10 @@ class Experiment:
             self.protocol_type.test_required_splits,
         )
         test_split = splits["test"]
+        self.logger.info(
+            "Scoring test data with selected validation configuration: "
+            f"parameters={validated_manifest['selected_model_parameters']}"
+        )
         if self.execution_mode == "inductive":
             scores = self.protocol_type.score_test(
                 model, test_split, self.logger.for_component(self.protocol_module)
@@ -306,7 +350,18 @@ class Experiment:
             scores = self.protocol_type.fit_score_test(
                 model, test_split, self.logger.for_component(self.protocol_module)
             )
-        threshold = validated_manifest["selected_threshold"]
+        selector = self.threshold_type(self.logger.for_component(self.threshold_module))
+        threshold_state = validated_manifest.get(
+            "threshold_state",
+            {"threshold": validated_manifest["selected_threshold"]},
+        )
+        if not isinstance(threshold_state, dict):
+            message = "Validated artifact threshold state must be a mapping"
+            self.logger.error(message)
+            raise TypeError(message)
+        selector.load_state(threshold_state)
+        threshold = selector.threshold_for(scores)
+        self.logger.info(f"Applied threshold to test scores: {threshold}")
         point_metrics(
             test_split.labels,
             scores,
@@ -349,7 +404,9 @@ class Experiment:
                 ],
             },
         )
-        self.logger.info(f"Completed testing: test_f1={metrics.f1}, run_dir={run_dir}")
+        self.logger.info(
+            f"Completed test phase: test_f1={metrics.f1}, run_dir={run_dir}"
+        )
         return TestResult(run_dir, threshold, metrics)
 
     def run(self, run_id: str | None = None) -> ExperimentResult:

@@ -58,7 +58,7 @@ def test_transductive_experiment_uses_validation_and_test_without_train(
                 },
                 "protocol": "transductive",
                 "training": {"epochs": 1},
-                "threshold": {"name": "validation_f1"},
+                "threshold": {"name": "validation_f1_quantile"},
                 "selection": {"metric": "f1", "direction": "maximize"},
                 "metrics": {
                     "vus": {"max_window": 2, "threshold_samples": 3},
@@ -90,6 +90,7 @@ def test_transductive_experiment_uses_validation_and_test_without_train(
     test_metrics = json.loads((tested.run_dir / "metrics.json").read_text())
     assert not (validated.run_dir / "model.pkl").exists()
     assert validated_manifest["protocol"]["execution_mode"] == "transductive"
+    assert validated_manifest["threshold_state"] == {"tail_fraction": 0.0}
     assert validated_manifest["model_diagnostics"]["iterations"] == 0
     assert test_metrics["model_diagnostics"]["iterations"] == 0
     assert validated_manifest["selected_model_parameters"]["lambda"] == 0.5

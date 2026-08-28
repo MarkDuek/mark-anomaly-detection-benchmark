@@ -1,8 +1,10 @@
+import sys
 from abc import ABC, abstractmethod
 from enum import IntEnum
 from pathlib import Path
 
 import yaml
+from tqdm import tqdm
 
 
 class LogLevel(IntEnum):
@@ -23,6 +25,9 @@ class LogOutput(ABC):
 
 class ConsoleOutput(LogOutput):
     def log(self, message: str) -> None:
+        if sys.stderr.isatty():
+            tqdm.write(message, file=sys.stderr)
+            return
         print(message)
 
 

@@ -1,3 +1,6 @@
 validation_f1:
   module: mark_ad_benchmark.thresholds.best_f1
   class: BestF1ThresholdSelector
+validation_f1_quantile:
+  module: mark_ad_benchmark.thresholds.validation_f1_quantile
+  class: ValidationF1QuantileThresholdSelector

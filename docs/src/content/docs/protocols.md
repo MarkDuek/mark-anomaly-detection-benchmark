@@ -10,7 +10,7 @@ Protocols define when a model may fit and which dataset split it may score. The 
 | [Inductive](/protocols/inductive/) | `inductive` | `train`, `validation` | `test` | Fit once on `train`; score later splits without refitting. |
 | [Transductive](/protocols/transductive/) | `transductive` | `validation` | `test` | Fit and score each split as an independent batch. |
 
-The experiment runner rejects incompatible model and protocol combinations. It selects the threshold from validation scores, then keeps that threshold fixed for test evaluation.
+The experiment runner rejects incompatible model and protocol combinations. It calibrates threshold selection from validation scores, then applies that calibration to test scores without using test labels.
 
 ## Available Protocols
 

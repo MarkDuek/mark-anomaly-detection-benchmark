@@ -1,5 +1,5 @@
 import math
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 
 import numpy as np
@@ -38,15 +38,24 @@ def vus_ranking_metrics(
 
 
 def vus_prediction_metrics(
-    labels: Sequence[int], predictions: Sequence[int], max_window: int
+    labels: Sequence[int],
+    predictions: Sequence[int],
+    max_window: int,
+    progress: Callable[[], None] | None = None,
 ) -> VusPredictionMetrics:
     """Average TSB-AD range precision, recall, and F1 over extension windows."""
     if not any(labels) or not any(predictions):
+        if progress is not None:
+            for _ in range(max_window + 1):
+                progress()
         return VusPredictionMetrics(precision=0.0, recall=0.0, f1=0.0)
-    values = [
-        range_counts(labels, predictions, window, include_existence=False)
-        for window in range(max_window + 1)
-    ]
+    values = []
+    for window in range(max_window + 1):
+        values.append(
+            range_counts(labels, predictions, window, include_existence=False)
+        )
+        if progress is not None:
+            progress()
     precision = sum(value[0] for value in values) / len(values)
     recall = sum(value[1] for value in values) / len(values)
     f1 = sum(value[2] for value in values) / len(values)

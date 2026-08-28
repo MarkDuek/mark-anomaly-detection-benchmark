@@ -1,10 +1,17 @@
-id: creditcard-pca-inductive
+id: creditcard-pca-inductive-validation-f1-quantile
 dataset: creditcard
 model:
   name: pca
   parameters:
     n_components: 5
   candidates:
+    n_components:
+    - 1
+    - 2
+    - 3
+    - 5
+    - 8
+    - 13
     standardize_features:
     - false
     - true
@@ -12,7 +19,7 @@ protocol: inductive
 training:
   epochs: 1
 threshold:
-  name: validation_f1
+  name: validation_f1_quantile
 selection:
   metric: f1
   direction: maximize

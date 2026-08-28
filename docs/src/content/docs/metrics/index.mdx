@@ -7,7 +7,7 @@ The benchmark reports complementary metric families from the same labels and ano
 
 ## Evaluation Inputs
 
-Every evaluation receives aligned binary labels and anomaly scores. A threshold converts each score into a prediction: scores greater than or equal to the threshold are predicted as anomalies. The threshold is selected on validation data and then fixed for test evaluation.
+Every evaluation receives aligned binary labels and anomaly scores. A threshold converts each score into a prediction: scores greater than or equal to the threshold are predicted as anomalies. Selector calibration uses validation labels; the effective test threshold is then derived without test labels.
 
 Some metric families use the scores directly and therefore do not depend on that threshold. Others use the fixed prediction vector. This separation keeps threshold selection from being influenced by test labels.
 

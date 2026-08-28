@@ -253,6 +253,11 @@ body:has(.runs-page) :where(main) {
 .metric-summary > div:first-child { border-left: 0; padding-left: 0; }
 .metric-summary small { color: var(--text-muted); text-transform: uppercase; }
 .metric-summary strong, .comparison-scroll td { font-family: var(--sl-font-mono); font-variant-numeric: tabular-nums; }
+.run-configuration { border-top: 1px solid var(--border); margin: 1.5rem 0; padding-top: 1rem; }
+.run-configuration h3 { font-size: 1rem; margin: 0 0 0.75rem; }
+.run-configuration table { font-size: 0.8125rem; margin: 0; }
+.run-configuration th { color: var(--text-muted); font-size: 0.8125rem; text-align: left; white-space: nowrap; width: 11rem; }
+.run-configuration td { font-family: var(--sl-font-mono); font-size: 0.75rem; overflow-wrap: anywhere; }
 #plot { border-bottom: 1px solid var(--border); margin: 1.5rem 0 2.5rem; }
 .comparison-options { align-items: center; gap: 0.5rem 1rem; margin-bottom: 1rem; }
 .comparison-scroll { overflow-x: auto; }
@@ -271,6 +276,7 @@ body:has(.runs-page) :where(main) {
 @media (max-width: 50rem) {
   .run-controls { align-items: stretch; flex-direction: column; }
   .metric-summary > div { margin-bottom: 0.75rem; }
+  .run-configuration th { white-space: normal; width: 8rem; }
 }
 
 @media (max-width: 50rem) {

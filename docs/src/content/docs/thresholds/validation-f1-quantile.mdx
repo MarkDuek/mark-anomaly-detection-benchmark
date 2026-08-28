@@ -1,0 +1,29 @@
+---
+title: Validation F1 Quantile
+description: Transfer a validation F1-selected score fraction across independently fitted batches.
+---
+
+`validation_f1_quantile` is intended for transductive models whose validation and test scores come from independently fitted batches. It first finds the validation threshold that maximizes point F1, then records the fraction of validation scores at or above that threshold.
+
+For validation scores $s_1, \ldots, s_n$ and selected threshold $\tau$, the recorded upper-tail fraction is:
+
+$$
+p = \frac{1}{n}\sum_{i=1}^{n}\mathbb{1}(s_i \geq \tau)
+$$
+
+For an unlabeled test-score sequence, the selector derives a new threshold that retains the highest $p$ fraction of test scores. Test labels are never used to choose that threshold.
+
+## Why Use It
+
+Robust PCA fits validation and test batches independently. Even after feature standardization, independently fitted sparse residuals can have different numeric score scales. Reusing a validation score value can therefore predict too many or too few test anomalies.
+
+This selector preserves the validation decision rate instead. If validation F1 selects 75 of 56,961 scores, it predicts the top 0.132% of test scores, regardless of the test score magnitudes.
+
+## Use
+
+```yaml
+threshold:
+  name: validation_f1_quantile
+```
+
+The validated artifact records the selected validation threshold and the tail fraction. The test artifact records the effective threshold derived from its test scores.
