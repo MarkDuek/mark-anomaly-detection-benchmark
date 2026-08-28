@@ -30,6 +30,8 @@ class PCAModel(InductiveAnomalyModel):
             message = "PCA feature_scaling must be none or standard"
             logger.error(message)
             raise ValueError(message)
+
+        # 1. configure PCA and optional train-fitted standardization (documentation excerpt; keep synchronized)
         self.n_components = n_components
         self.feature_scaling = feature_scaling
         self.logger = logger
@@ -47,6 +49,8 @@ class PCAModel(InductiveAnomalyModel):
         self.logger.info(
             f"Fitting PCA with {self.n_components} components on {len(features)} rows"
         )
+
+        # 2. fit PCA on train-only scaled features (documentation excerpt; keep synchronized)
         self.pca.fit(self.fit_scale(features))
         self.feature_width = feature_width
 
@@ -60,6 +64,8 @@ class PCAModel(InductiveAnomalyModel):
             message = "PCA scoring features have an incompatible width"
             self.logger.error(message)
             raise ValueError(message)
+
+        # 3. scale, reconstruct, and score each feature row (documentation excerpt; keep synchronized)
         scaled = self.scale(features)
         reconstructed = self.pca.inverse_transform(self.pca.transform(scaled))
         scores = tuple(
@@ -77,6 +83,8 @@ class PCAModel(InductiveAnomalyModel):
             message = "PCA must be fitted before saving"
             self.logger.error(message)
             raise ValueError(message)
+
+        # 4. persist fitted PCA state without the process-specific logger (documentation excerpt; keep synchronized)
         with path.open("wb") as file:
             pickle.dump(
                 {
@@ -95,6 +103,8 @@ class PCAModel(InductiveAnomalyModel):
         """Restore fitted PCA state from a trusted training artifact."""
         with path.open("rb") as file:
             payload = pickle.load(file)
+
+        # 5. restore fitted PCA state with the current process logger (documentation excerpt; keep synchronized)
         model = cls(
             {
                 "n_components": payload["n_components"],

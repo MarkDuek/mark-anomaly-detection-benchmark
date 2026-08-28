@@ -20,10 +20,37 @@ export default defineConfig({
       ],
       sidebar: [
         { label: "Overview", link: "/" },
-        { label: "Models", link: "/models/" },
-        { label: "Protocols", link: "/protocols/" },
-        { label: "Thresholds", link: "/thresholds/" },
-        { label: "Datasets", link: "/datasets/" },
+        {
+          label: "Models",
+          items: [
+            { label: "Overview", link: "/models/" },
+            { label: "PCA", link: "/models/pca/" },
+            { label: "Robust PCA", link: "/models/robust-pca/" },
+          ],
+        },
+        {
+          label: "Protocols",
+          items: [
+            { label: "Overview", link: "/protocols/" },
+            { label: "Inductive", link: "/protocols/inductive/" },
+            { label: "Transductive", link: "/protocols/transductive/" },
+          ],
+        },
+        {
+          label: "Thresholds",
+          items: [
+            { label: "Overview", link: "/thresholds/" },
+            { label: "Validation F1", link: "/thresholds/validation-f1/" },
+          ],
+        },
+        {
+          label: "Datasets",
+          items: [
+            { label: "Overview", link: "/datasets/" },
+            { label: "CalIt2", link: "/datasets/calit2/" },
+            { label: "Credit Card", link: "/datasets/creditcard/" },
+          ],
+        },
         {
           label: "Metrics",
           items: [

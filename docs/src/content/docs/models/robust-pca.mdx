@@ -1,0 +1,141 @@
+---
+title: Robust PCA
+description: Transductive low-rank plus sparse decomposition with L1 anomaly scores.
+---
+
+`RobustPCAModel` is a transductive anomaly model. For one complete feature matrix $X$, it finds a low-rank matrix $L$ and sparse matrix $S$, then assigns each row the L1 magnitude of its sparse component.
+
+## Parameters
+
+| Parameter | Required value | Meaning |
+| --- | --- | --- |
+| `lambda` | Positive number | Sparse-component shrinkage weight. |
+| `tolerance` | Positive number | Relative Frobenius-norm convergence tolerance. |
+| `max_iterations` | Positive integer | Maximum solver iterations. |
+| `score_norm` | `l1` | Row-wise norm used to produce anomaly scores. |
+| `feature_scaling` | `standard` | Standardize every feature in the input batch before decomposition. |
+
+## Standardize
+
+For feature $j$, the model standardizes the complete batch before decomposition:
+
+$$
+M_{ij} = \frac{X_{ij} - \mu_j}{\sigma_j}
+$$
+
+Here, $\mu_j$ and $\sigma_j$ are the mean and standard deviation of feature $j$ over that batch. The model requires a nonempty, finite two-dimensional input matrix.
+
+```python
+# 1. standardize the complete transductive feature batch (documentation excerpt; keep synchronized)
+matrix = StandardScaler().fit_transform(matrix)
+```
+
+## Decompose
+
+For standardized matrix $M$, Principal Component Pursuit solves:
+
+$$
+\min_{L,S} \lVert L \rVert_* + \lambda \lVert S \rVert_1
+\quad \text{subject to} \quad M = L + S
+$$
+
+The nuclear norm $\lVert L \rVert_*$ encourages a low-rank normal component. The element-wise L1 norm $\lVert S \rVert_1$ encourages a sparse anomaly component. `lambda` controls that sparsity penalty.
+
+### Initialize
+
+The implementation initializes $L_0 = S_0 = Y_0 = 0$, where $Y$ is the dual matrix, and sets:
+
+$$
+\mu = \frac{mn}{4\lVert M \rVert_1},
+\qquad
+\epsilon = \mathrm{tolerance} \cdot \lVert M \rVert_F
+$$
+
+where $m \times n$ is the shape of $M$. $\epsilon$ is the convergence threshold.
+
+```python
+# 2. initialize augmented-Lagrangian solver state (documentation excerpt; keep synchronized)
+mu = matrix.size / (4.0 * float(np.abs(matrix).sum()))
+low_rank = np.zeros_like(matrix)
+sparse = np.zeros_like(matrix)
+dual = np.zeros_like(matrix)
+convergence_threshold = self.tolerance * matrix_norm
+```
+
+### Iterate
+
+For iteration $k$, the model uses singular-value thresholding $\mathcal{D}_\tau$ for the low-rank update and element-wise soft thresholding $\mathcal{S}_\tau$ for the sparse update:
+
+$$
+L_{k+1} = \mathcal{D}_{1/\mu}\left(M - S_k + \frac{Y_k}{\mu}\right)
+$$
+
+$$
+S_{k+1} = \mathcal{S}_{\lambda/\mu}\left(M - L_{k+1} + \frac{Y_k}{\mu}\right)
+$$
+
+For $A = U\,\mathrm{diag}(d)\,V^\mathsf{T}$, singular-value thresholding is:
+
+$$
+\mathcal{D}_\tau(A) = U\,\mathrm{diag}(\max(d - \tau, 0))\,V^\mathsf{T}
+$$
+
+For scalar $a$, soft thresholding is:
+
+$$
+\mathcal{S}_\tau(a) = \mathrm{sign}(a)\max(|a| - \tau, 0)
+$$
+
+The residual and dual update are:
+
+$$
+R_{k+1} = M - L_{k+1} - S_{k+1},
+\qquad
+Y_{k+1} = Y_k + \mu R_{k+1}
+$$
+
+The iteration stops when $\lVert R_{k+1} \rVert_F \leq \epsilon$.
+
+```python
+# 3. alternate low-rank and sparse updates until convergence (documentation excerpt; keep synchronized)
+for iteration in range(1, self.max_iterations + 1):
+    low_rank = singular_value_threshold(matrix - sparse + dual / mu, 1.0 / mu)
+    sparse = soft_threshold(
+        matrix - low_rank + dual / mu, self.lambda_value / mu
+    )
+    residual_matrix = matrix - low_rank - sparse
+    residual = float(np.linalg.norm(residual_matrix, ord="fro"))
+    dual += mu * residual_matrix
+    if residual <= convergence_threshold:
+        return self.finish(
+            low_rank, sparse, iteration, residual, convergence_threshold
+        )
+```
+
+An all-zero standardized batch returns zero components and scores. Otherwise, failure to converge within `max_iterations` raises an error.
+
+## Score And Diagnostics
+
+For row $i$ with $p$ features, the anomaly score is the L1 norm of the sparse row $S_i$:
+
+$$
+\mathrm{score}(i) = \lVert S_i \rVert_1 = \sum_{j=1}^{p}|S_{ij}|
+$$
+
+The model records the final iteration count, residual, and convergence threshold as diagnostics. Each validation or test batch is decomposed independently.
+
+```python
+# 4. retain decomposition diagnostics and score sparse row magnitudes (documentation excerpt; keep synchronized)
+self.low_rank_component = tuple(tuple(row) for row in low_rank.tolist())
+self.sparse_component = tuple(tuple(row) for row in sparse.tolist())
+self._diagnostics = {
+    "iterations": iterations,
+    "residual": residual,
+    "convergence_threshold": convergence_threshold,
+}
+scores = tuple(float(np.abs(row).sum()) for row in sparse)
+```
+
+## Reference
+
+- Candes, Emmanuel J., Xiaodong Li, Yi Ma, and John Wright. [*Robust Principal Component Analysis?*](https://doi.org/10.1145/1970392.1970395), Journal of the ACM, 2011.

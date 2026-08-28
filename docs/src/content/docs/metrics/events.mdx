@@ -3,6 +3,135 @@ title: Event Metrics
 description: Metrics for contiguous anomaly events.
 ---
 
+Event metrics evaluate one fixed binary prediction vector against binary labels. An event is a contiguous positive range, represented by its inclusive start and end indices. The benchmark reports point-adjusted F1, event F1, and range F1 from those ranges.
+
+The evaluator calculates every event metric family from the same frozen predictions:
+
+```python
+# 1. calculate event metric families from frozen predictions (documentation excerpt; keep synchronized)
+adjusted = point_adjust_predictions(labels, predictions)
+point_adjusted_f1 = f1(labels, adjusted)
+precision = point_precision(labels, predictions)
+event_recall = event_hit_recall(labels, predictions)
+range_precision = range_score(predictions, labels, 0.0)
+range_recall = range_score(labels, predictions, recall_existence_weight)
+```
+
+## Event Ranges
+
+For binary sequence $v$, an event is a maximal interval $[a, b]$ where $v_t = 1$ for every $a \leq t \leq b$. Adjacent positive timestamps belong to the same event.
+
+```python
+# 2. identify contiguous positive event ranges (documentation excerpt; keep synchronized)
+result = []
+start: int | None = None
+for index, value in enumerate(values):
+    if value and start is None:
+        start = index
+    elif not value and start is not None:
+        result.append((start, index - 1))
+        start = None
+if start is not None:
+    result.append((start, len(values) - 1))
+return tuple(result)
+```
+
+## Point-Adjusted F1
+
+Point adjustment gives full credit for a labeled event once any timestamp inside it is predicted anomalous. For every true event $R$, if $\sum_{t \in R}\hat{y}_t > 0$, the adjusted prediction is set to one for all $t \in R$:
+
+$$
+\tilde{y}_t = 1 \quad \forall t \in R
+$$
+
+The reported value is ordinary point F1 between labels $y$ and adjusted predictions $\tilde{y}$.
+
+```python
+# 3. expand every detected true event across its full range (documentation excerpt; keep synchronized)
+adjusted = list(predictions)
+for start, end in ranges(labels):
+    if any(predictions[start : end + 1]):
+        adjusted[start : end + 1] = [1] * (end - start + 1)
+return tuple(adjusted)
+```
+
+## Event F1
+
+Event F1 combines ordinary point precision with event-hit recall. A true event is hit when at least one prediction occurs within its range:
+
+$$
+\mathrm{event\ recall} =
+\frac{\#\{R \in \mathcal{R}_{true}: \exists t \in R, \hat{y}_t = 1\}}
+{\lvert\mathcal{R}_{true}\rvert}
+$$
+
+The result is the harmonic mean of point precision and event recall:
+
+$$
+\mathrm{event\ F1} =
+\frac{2 \cdot \mathrm{point\ precision} \cdot \mathrm{event\ recall}}
+{\mathrm{point\ precision} + \mathrm{event\ recall}}
+$$
+
+Event recall is `0.0` when there are no true events.
+
+```python
+# 4. calculate the fraction of true events hit by predictions (documentation excerpt; keep synchronized)
+true_ranges = ranges(labels)
+return (
+    sum(any(predictions[start : end + 1]) for start, end in true_ranges)
+    / len(true_ranges)
+    if true_ranges
+    else 0.0
+)
+```
+
+## Range F1
+
+Range F1 scores every reference event using three terms. For reference event $R$, let $O(R)$ be the positive ranges of comparison vector $q$ that overlap it.
+
+$$
+\mathrm{existence}(R) = \begin{cases}1 & \text{if } O(R) \neq \varnothing \\ 0 & \text{otherwise}\end{cases}
+$$
+
+$$
+\mathrm{coverage}(R) = \frac{\sum_{t \in R} q_t}{|R|},
+\qquad
+\mathrm{cardinality}(R) = \begin{cases}\frac{1}{|O(R)|} & \text{if } O(R) \neq \varnothing \\ 0 & \text{otherwise}\end{cases}
+$$
+
+For existence weight $w$, the range score averages:
+
+$$
+w \cdot \mathrm{existence}(R)
++ (1 - w) \cdot \mathrm{coverage}(R) \cdot \mathrm{cardinality}(R)
+$$
+
+Range precision uses predicted events as references and labels as $q$, with $w = 0$. Range recall uses true events as references and predictions as $q$, with configured `recall_existence_weight`. Range F1 is their harmonic mean. All current experiment definitions set `recall_existence_weight` to `0.2`.
+
+```python
+# 5. score each reference event by existence, coverage, and cardinality (documentation excerpt; keep synchronized)
+reference_ranges = ranges(references)
+predicted_ranges = ranges(predictions)
+if not reference_ranges:
+    return 0.0
+total = 0.0
+for start, end in reference_ranges:
+    overlaps = [
+        predicted
+        for predicted in predicted_ranges
+        if predicted[0] <= end and start <= predicted[1]
+    ]
+    existence = float(bool(overlaps))
+    covered = sum(predictions[start : end + 1]) / (end - start + 1)
+    cardinality = 1 / len(overlaps) if overlaps else 0.0
+    total += (
+        existence_weight * existence
+        + (1 - existence_weight) * covered * cardinality
+    )
+return total / len(reference_ranges)
+```
+
 ## Reference
 
 - Tatbul, Nesime, Tae Jun Lee, Stan Zdonik, Mejbah Alam, and Justin Gottschlich. [*Precision and Recall for Time Series*](https://proceedings.neurips.cc/paper/2018/hash/8f468c873a32bb0619eaeb2050ba45d1-Abstract.html), NeurIPS 2018.

@@ -1,0 +1,37 @@
+---
+title: Transductive Protocol
+description: Fit and score validation and test feature batches independently.
+---
+
+The transductive protocol is for models implementing `TransductiveAnomalyModel`, such as [Robust PCA](/models/robust-pca/). A model fits and scores one complete feature batch as a single operation. It does not learn a model on training data for later reuse.
+
+## Required Splits
+
+| Stage | Required split | Use |
+| --- | --- | --- |
+| Validation | `validation` | Fit and score the complete validation batch. |
+| Test | `test` | Instantiate a new model, then fit and score the complete test batch. |
+
+At setup, the validation split must contain nonempty feature rows of one consistent width. Transductive experiments require exactly one configured training epoch.
+
+```python
+# 1. construct and validate the validation split (documentation excerpt; keep synchronized)
+protocol = cls(validation=splits["validation"], logger=logger)
+protocol.validate_feature_widths()
+```
+
+## Lifecycle
+
+Validation fits and scores the same complete validation batch. The resulting scores select the threshold and model parameter candidate.
+
+```python
+# 2. fit and score the validation batch together (documentation excerpt; keep synchronized)
+return model.fit_score(self.validation.features)
+```
+
+The test lifecycle creates a new model and fits it only on the test batch. This model is independent of the model used for validation; the selected validation threshold remains fixed.
+
+```python
+# 3. fit and score the test batch independently (documentation excerpt; keep synchronized)
+return model.fit_score(test.features)
+```

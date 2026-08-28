@@ -1,0 +1,103 @@
+---
+title: PCA
+description: Train-scaled principal-component reconstruction residuals.
+---
+
+`PCAModel` is an inductive anomaly model. It uses [scikit-learn's `PCA`](https://scikit-learn.org/stable/modules/generated/sklearn.decomposition.PCA.html) to learn a low-dimensional representation from the training split, then assigns each validation or test row a higher-is-more-anomalous Euclidean reconstruction residual.
+
+## Parameters
+
+| Parameter | Required value | Meaning |
+| --- | --- | --- |
+| `n_components` | Integer from `1` to one less than the feature width | Number of principal components retained for reconstruction. |
+| `feature_scaling` | `none` or `standard` | Whether to fit `StandardScaler` on training features before PCA. |
+
+PCA itself centers its input. With `feature_scaling: standard`, the benchmark additionally uses [scikit-learn's `StandardScaler`](https://scikit-learn.org/stable/modules/generated/sklearn.preprocessing.StandardScaler.html) to scale every feature using training-split statistics. The fitted scaler is then reused unchanged for validation and test rows.
+
+```python
+# 1. configure PCA and optional train-fitted standardization (documentation excerpt; keep synchronized)
+self.n_components = n_components
+self.feature_scaling = feature_scaling
+self.logger = logger
+self.pca = PCA(n_components=n_components)
+self.scaler = StandardScaler() if feature_scaling == "standard" else None
+self.feature_width: int | None = None
+```
+
+## Fit
+
+The model rejects a component count equal to or greater than the feature width, because that would permit full-dimensional reconstruction. It fits the optional scaler and PCA estimator using only training features.
+
+### Principal Components
+
+For the training matrix $X$, scikit-learn PCA first centers every feature by subtracting its training mean, producing $X_c$. It computes a singular value decomposition:
+
+$$
+X_c = U \Sigma V^\mathsf{T}
+$$
+
+The first $k$ rows of $V^\mathsf{T}$, where $k$ is `n_components`, form the retained principal directions. A feature row is projected onto those directions and reconstructed in the original feature space. Keeping fewer directions than the feature width forces the reconstruction to omit variation outside the learned low-dimensional subspace.
+
+```python
+# 2. fit PCA on train-only scaled features (documentation excerpt; keep synchronized)
+self.pca.fit(self.fit_scale(features))
+self.feature_width = feature_width
+```
+
+## Score
+
+For each later feature row $x$, the model applies the fitted scaling transformation, projects the transformed row into PCA space, reconstructs it as $\hat{x}$, and uses the Euclidean residual as its anomaly score:
+
+$$
+\mathrm{score}(x) = \lVert x - \hat{x} \rVert_2
+$$
+
+Here, $x$ is the scaled row. The model requires the same feature width used during fitting.
+
+```python
+# 3. scale, reconstruct, and score each feature row (documentation excerpt; keep synchronized)
+scaled = self.scale(features)
+reconstructed = self.pca.inverse_transform(self.pca.transform(scaled))
+scores = tuple(
+    math.dist(feature_row, reconstructed_row)
+    for feature_row, reconstructed_row in zip(
+        scaled, reconstructed, strict=True
+    )
+)
+```
+
+## Persisted State
+
+Validated inductive runs persist the fitted PCA estimator, optional fitted scaler, feature width, and configured parameters. The logger is deliberately not serialized; loading attaches the logger of the current process.
+
+```python
+# 4. persist fitted PCA state without the process-specific logger (documentation excerpt; keep synchronized)
+pickle.dump(
+    {
+        "n_components": self.n_components,
+        "feature_scaling": self.feature_scaling,
+        "feature_width": self.feature_width,
+        "pca": self.pca,
+        "scaler": self.scaler,
+    },
+    file,
+)
+```
+
+```python
+# 5. restore fitted PCA state with the current process logger (documentation excerpt; keep synchronized)
+model = cls(
+    {
+        "n_components": payload["n_components"],
+        "feature_scaling": payload["feature_scaling"],
+    },
+    logger,
+)
+model.feature_width = payload["feature_width"]
+model.pca = payload["pca"]
+model.scaler = payload["scaler"]
+```
+
+## Reference
+
+- Jolliffe, Ian T. [*Principal Component Analysis*](https://link.springer.com/book/10.1007/b98835), Springer Series in Statistics, 2002.

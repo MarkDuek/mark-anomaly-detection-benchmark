@@ -3,8 +3,11 @@ title: Models
 description: Methods evaluated by the benchmark.
 ---
 
-This section will introduce the models evaluated by the benchmark.
+Models transform multivariate feature rows into higher-is-more-anomalous scores. Their declared lifecycle determines whether they learn from a training split or score a complete batch.
 
-## Planned Content
+## Available Models
 
-Model documentation will be added in a later iteration.
+<div class="documentation-map">
+  <a href="/models/pca/"><strong>PCA</strong><span>Train-split principal-component reconstruction residuals.</span></a>
+  <a href="/models/robust-pca/"><strong>Robust PCA</strong><span>Batch low-rank plus sparse decomposition with L1 anomaly scores.</span></a>
+</div>

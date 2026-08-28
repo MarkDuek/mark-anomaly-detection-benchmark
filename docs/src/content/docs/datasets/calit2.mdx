@@ -1,0 +1,25 @@
+---
+title: CalIt2
+description: Two-feature CalIt2 traffic dataset from mTSBench.
+---
+
+The `calit2` manifest uses the `PLAN-Lab/mTSBench` Hugging Face dataset repository at revision `9ea52adfa86373576f446a7f3f26395e506f1b8b`.
+
+## Splits
+
+| Split | Rows | Source file | Refined file |
+| --- | ---: | --- | --- |
+| Train | 940 | `CalIt2/CalIt2_traffic_train.csv` | `data/refined/calit2/train.csv` |
+| Validation | 1,008 | `CalIt2/CalIt2_traffic_val.csv` | `data/refined/calit2/validation.csv` |
+| Test | 4,032 | `CalIt2/CalIt2_traffic_test.csv` | `data/refined/calit2/test.csv` |
+
+## Schema
+
+| Raw column | Refined column | Role |
+| --- | --- | --- |
+| `timestamp` | `timestamp` | Timestamp |
+| `in_count` | `feature_0` | Numeric feature |
+| `out_count` | `feature_1` | Numeric feature |
+| `is_anomaly` | `label` | Binary anomaly label |
+
+The manifest stores SHA-256 checksums for every raw and refined split. The loader verifies the refined checksum before a protocol receives the split.

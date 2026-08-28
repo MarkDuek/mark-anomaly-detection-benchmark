@@ -13,7 +13,11 @@ class BestF1ThresholdSelector(ThresholdSelector):
 
     def fit(self, scores: Sequence[float], labels: Sequence[int]) -> float:
         """Select a threshold using labeled validation scores."""
+
+        # 1. validate labeled validation scores (documentation excerpt; keep synchronized)
         validate_inputs(scores, labels, self.logger)
+
+        # 2. order score-label pairs from highest to lowest score (documentation excerpt; keep synchronized)
         best_threshold = math.inf
         best_f1 = 0.0
         true_positives = 0
@@ -21,6 +25,8 @@ class BestF1ThresholdSelector(ThresholdSelector):
         positives = sum(labels)
         ordered = sorted(zip(scores, labels), reverse=True)
         index = 0
+
+        # 3. evaluate point F1 at each distinct score threshold (documentation excerpt; keep synchronized)
         while index < len(ordered):
             threshold = ordered[index][0]
             while index < len(ordered) and ordered[index][0] == threshold:
@@ -45,6 +51,8 @@ class BestF1ThresholdSelector(ThresholdSelector):
                 if precision + recall
                 else 0.0
             )
+
+            # 4. retain the first highest threshold with maximal F1 (documentation excerpt; keep synchronized)
             if f1 > best_f1:
                 best_f1 = f1
                 best_threshold = threshold

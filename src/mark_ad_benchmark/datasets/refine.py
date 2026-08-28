@@ -23,6 +23,7 @@ def refine_dataset(
     refined_dir.mkdir(parents=True, exist_ok=True)
     logger.info(f"Refining dataset: {manifest['id']}")
 
+    # 3. verify raw splits and project them into the refined schema (documentation excerpt; keep synchronized)
     for split, remote_path in manifest["files"].items():
         raw_path = raw_dir / Path(remote_path).name
         if sha256(raw_path) != raw_checksums[split]:

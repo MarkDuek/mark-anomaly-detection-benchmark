@@ -1,0 +1,33 @@
+---
+title: Thresholds
+description: Rules for converting anomaly scores into binary decisions.
+---
+
+Thresholds convert higher-is-more-anomalous scores into binary predictions. The experiment runner selects a threshold from labeled validation scores, records it in the validated run artifact, and applies that same value to test scores.
+
+## Prediction Rule
+
+For anomaly score $s_t$ and selected threshold $\tau$, the prediction at timestamp $t$ is:
+
+$$
+\hat{y}_t = \begin{cases}
+1 & \text{if } s_t \geq \tau \\
+0 & \text{otherwise}
+\end{cases}
+$$
+
+The threshold affects point, event, affiliation, and prediction-based VUS metrics. Ranking metrics use the original scores directly and do not use a threshold.
+
+## Lifecycle
+
+1. A protocol produces validation scores.
+2. The configured selector uses validation scores and labels to select $\tau$.
+3. The experiment records $\tau$ with the selected validation artifact.
+4. A protocol produces test scores.
+5. The evaluator applies the recorded $\tau$ to test scores without using test labels to select it.
+
+## Available Selectors
+
+| Selector | Objective | Tie rule |
+| --- | --- | --- |
+| [Validation F1](/thresholds/validation-f1/) | Maximize point F1 over validation-score thresholds | Keep the highest threshold among equal F1 values. |

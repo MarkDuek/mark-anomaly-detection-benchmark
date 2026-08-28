@@ -30,6 +30,7 @@ class InductiveProtocol(Protocol):
             logger.error(message)
             raise ValueError(message)
 
+        # 1. construct and validate train and validation splits (documentation excerpt; keep synchronized)
         protocol = cls(
             train=splits["train"],
             validation=splits["validation"],
@@ -42,11 +43,15 @@ class InductiveProtocol(Protocol):
     def fit(self, model: InductiveAnomalyModel) -> None:
         """Fit on train features only."""
         self.logger.info("Fitting model on train split")
+
+        # 2. fit the model only on train features (documentation excerpt; keep synchronized)
         model.fit(self.train.features)
 
     def score_validation(self, model: InductiveAnomalyModel) -> tuple[float, ...]:
         """Score validation features without fitting the model."""
         self.logger.info("Scoring validation split")
+
+        # 3. score validation features without refitting (documentation excerpt; keep synchronized)
         return model.score(self.validation.features)
 
     @classmethod
@@ -58,6 +63,8 @@ class InductiveProtocol(Protocol):
     ) -> tuple[float, ...]:
         """Score test features without fitting the supplied model."""
         logger.info("Scoring test split")
+
+        # 4. score test features without refitting (documentation excerpt; keep synchronized)
         return model.score(test.features)
 
     def validate_feature_widths(self) -> None:

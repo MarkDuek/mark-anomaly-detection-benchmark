@@ -21,10 +21,10 @@ The label and score sequences must have equal length. The threshold is selected 
 The implementation begins by counting true positives, false positives, and false negatives:
 
 ```python
-# Reference implementation; keep this excerpt in sync with the source.
 def calculate_point_metrics(
     labels: Sequence[int], scores: Sequence[float], threshold: float
 ) -> PointMetrics:
+    # 1. count confusion-matrix values (documentation excerpt; keep synchronized)
     true_positives = sum(
         label == 1 and score >= threshold for label, score in zip(labels, scores)
     )
@@ -47,7 +47,7 @@ $$
 It is `0.0` when the model predicts no anomalies.
 
 ```python
-# Reference implementation; keep this excerpt in sync with the source.
+# 2. calculate precision (documentation excerpt; keep synchronized)
 precision = (
     true_positives / (true_positives + false_positives)
     if true_positives + false_positives
@@ -66,7 +66,7 @@ $$
 It is `0.0` when the series contains no labeled anomalies.
 
 ```python
-# Reference implementation; keep this excerpt in sync with the source.
+# 3. calculate recall (documentation excerpt; keep synchronized)
 recall = (
     true_positives / (true_positives + false_negatives)
     if true_positives + false_negatives
@@ -86,7 +86,7 @@ $$
 It is `0.0` when both precision and recall are zero.
 
 ```python
-# Reference implementation; keep this excerpt in sync with the source.
+# 4. calculate F1 (documentation excerpt; keep synchronized)
 f1 = 2 * precision * recall / (precision + recall) if precision + recall else 0.0
 ```
 

@@ -19,6 +19,8 @@ def event_metrics(
 ) -> EventMetrics:
     """Calculate event-aware metrics from one fixed binary prediction vector."""
     validate_binary_vectors(labels, predictions)
+
+    # 1. calculate event metric families from frozen predictions (documentation excerpt; keep synchronized)
     adjusted = point_adjust_predictions(labels, predictions)
     point_adjusted_f1 = f1(labels, adjusted)
     precision = point_precision(labels, predictions)
@@ -38,6 +40,8 @@ def event_metrics(
 
 def ranges(values: Sequence[int]) -> tuple[tuple[int, int], ...]:
     """Return contiguous positive runs as inclusive index ranges."""
+
+    # 2. identify contiguous positive event ranges (documentation excerpt; keep synchronized)
     result = []
     start: int | None = None
     for index, value in enumerate(values):
@@ -55,6 +59,8 @@ def point_adjust_predictions(
     labels: Sequence[int], predictions: Sequence[int]
 ) -> tuple[int, ...]:
     """Expand a hit prediction to cover its complete true anomaly range."""
+
+    # 3. expand every detected true event across its full range (documentation excerpt; keep synchronized)
     adjusted = list(predictions)
     for start, end in ranges(labels):
         if any(predictions[start : end + 1]):
@@ -64,6 +70,8 @@ def point_adjust_predictions(
 
 def event_hit_recall(labels: Sequence[int], predictions: Sequence[int]) -> float:
     """Return the fraction of true anomaly ranges hit by a prediction."""
+
+    # 4. calculate the fraction of true events hit by predictions (documentation excerpt; keep synchronized)
     true_ranges = ranges(labels)
     return (
         sum(any(predictions[start : end + 1]) for start, end in true_ranges)
@@ -77,6 +85,8 @@ def range_score(
     references: Sequence[int], predictions: Sequence[int], existence_weight: float
 ) -> float:
     """Calculate TSB-AD range recall semantics for binary reference ranges."""
+
+    # 5. score each reference event by existence, coverage, and cardinality (documentation excerpt; keep synchronized)
     reference_ranges = ranges(references)
     predicted_ranges = ranges(predictions)
     if not reference_ranges:

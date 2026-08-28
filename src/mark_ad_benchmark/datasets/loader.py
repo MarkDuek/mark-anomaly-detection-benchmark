@@ -28,12 +28,14 @@ def load_refined_dataset(
     datasets = {}
     logger.info(f"Loading refined dataset: {manifest['id']}")
 
+    # 4. resolve the splits required by the active protocol (documentation excerpt; keep synchronized)
     requested_splits = requested_splits or tuple(manifest["files"])
     missing_splits = set(requested_splits) - manifest["files"].keys()
     if missing_splits:
         message = f"Dataset manifest is missing splits: {sorted(missing_splits)}"
         logger.error(message)
         raise ValueError(message)
+    # 5. verify and materialize each refined split (documentation excerpt; keep synchronized)
     for split in requested_splits:
         path = dataset_dir / f"{split}.csv"
         if sha256(path) != checksums[split]:

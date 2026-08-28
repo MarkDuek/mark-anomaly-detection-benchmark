@@ -1,0 +1,73 @@
+---
+title: Validation F1 Threshold
+description: Select the highest validation-score threshold with maximal point F1.
+---
+
+`validation_f1` is implemented by `BestF1ThresholdSelector`. It accepts aligned, finite validation scores and binary labels, then selects the highest validation-score threshold with maximal point F1.
+
+## Validate
+
+```python
+# 1. validate labeled validation scores (documentation excerpt; keep synchronized)
+validate_inputs(scores, labels, self.logger)
+```
+
+The selector sorts score-label pairs in descending score order. Its initial threshold is positive infinity, which represents predicting no anomalies.
+
+```python
+# 2. order score-label pairs from highest to lowest score (documentation excerpt; keep synchronized)
+best_threshold = math.inf
+best_f1 = 0.0
+true_positives = 0
+false_positives = 0
+positives = sum(labels)
+ordered = sorted(zip(scores, labels), reverse=True)
+index = 0
+```
+
+For every distinct validation score $\tau$, it adds all rows with score $\tau$ to the predicted-positive set. It then calculates point precision, recall, and F1 from the cumulative counts.
+
+$$
+TP(\tau) = \sum_t [s_t \geq \tau \land y_t = 1]
+$$
+
+$$
+FP(\tau) = \sum_t [s_t \geq \tau \land y_t = 0],
+\qquad
+FN(\tau) = \sum_t [s_t < \tau \land y_t = 1]
+$$
+
+```python
+# 3. evaluate point F1 at each distinct score threshold (documentation excerpt; keep synchronized)
+while index < len(ordered):
+    threshold = ordered[index][0]
+    while index < len(ordered) and ordered[index][0] == threshold:
+        if ordered[index][1]:
+            true_positives += 1
+        else:
+            false_positives += 1
+        index += 1
+    false_negatives = positives - true_positives
+    precision = (
+        true_positives / (true_positives + false_positives)
+        if true_positives + false_positives
+        else 0.0
+    )
+    recall = (
+        true_positives / (true_positives + false_negatives)
+        if true_positives + false_negatives
+        else 0.0
+    )
+    f1 = 2 * precision * recall / (precision + recall) if precision + recall else 0.0
+```
+
+Scores are processed from highest to lowest. Because the selector updates only when F1 is strictly greater than the current best, equal-F1 candidates preserve the first, highest threshold.
+
+```python
+# 4. retain the first highest threshold with maximal F1 (documentation excerpt; keep synchronized)
+if f1 > best_f1:
+    best_f1 = f1
+    best_threshold = threshold
+```
+
+If no threshold produces F1 greater than zero, the selector returns `inf`. Since finite scores cannot reach that threshold, this produces no positive predictions.

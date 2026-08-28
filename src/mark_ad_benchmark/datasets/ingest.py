@@ -20,6 +20,7 @@ def ingest_dataset(
         logger.error(message)
         raise ValueError(message)
 
+    # 1. resolve and pin the source revision (documentation excerpt; keep synchronized)
     revision = source.get("revision")
     if revision is None:
         revision = HfApi().dataset_info(source["repository"]).sha
@@ -29,6 +30,7 @@ def ingest_dataset(
     dataset_dir.mkdir(parents=True, exist_ok=True)
     checksums = manifest.setdefault("checksums", {}).setdefault("raw", {})
 
+    # 2. download, validate, and checksum every raw split (documentation excerpt; keep synchronized)
     for split, remote_path in manifest["files"].items():
         downloaded_path = Path(
             hf_hub_download(

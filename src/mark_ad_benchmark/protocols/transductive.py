@@ -28,6 +28,7 @@ class TransductiveProtocol(Protocol):
             message = f"Missing required splits: {sorted(missing_splits)}"
             logger.error(message)
             raise ValueError(message)
+        # 1. construct and validate the validation split (documentation excerpt; keep synchronized)
         protocol = cls(validation=splits["validation"], logger=logger)
         protocol.validate_feature_widths()
         logger.info("Prepared transductive validation split")
@@ -38,6 +39,8 @@ class TransductiveProtocol(Protocol):
     ) -> tuple[float, ...]:
         """Fit and score the validation split as one isolated batch."""
         self.logger.info("Fitting and scoring validation split")
+
+        # 2. fit and score the validation batch together (documentation excerpt; keep synchronized)
         return model.fit_score(self.validation.features)
 
     @classmethod
@@ -49,6 +52,8 @@ class TransductiveProtocol(Protocol):
     ) -> tuple[float, ...]:
         """Fit and score the test split with a newly instantiated model."""
         logger.info("Fitting and scoring test split")
+
+        # 3. fit and score the test batch independently (documentation excerpt; keep synchronized)
         return model.fit_score(test.features)
 
     def validate_feature_widths(self) -> None:

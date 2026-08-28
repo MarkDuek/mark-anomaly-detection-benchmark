@@ -1,0 +1,48 @@
+---
+title: Inductive Protocol
+description: Fit once on training data and score held-out validation and test splits.
+---
+
+The inductive protocol is for models implementing `InductiveAnomalyModel`, such as [PCA](/models/pca/). It learns only from the training split. Validation selects model parameters and the anomaly-score threshold; the selected fitted model then scores the test split without refitting.
+
+## Required Splits
+
+| Stage | Required split | Use |
+| --- | --- | --- |
+| Training and validation | `train`, `validation` | Fit the model on `train`; score `validation`. |
+| Test | `test` | Score the persisted selected model. |
+
+At setup, the protocol requires nonempty training and validation feature rows with one shared feature width.
+
+```python
+# 1. construct and validate train and validation splits (documentation excerpt; keep synchronized)
+protocol = cls(
+    train=splits["train"],
+    validation=splits["validation"],
+    logger=logger,
+)
+protocol.validate_feature_widths()
+```
+
+## Lifecycle
+
+The model fit receives only `train.features`.
+
+```python
+# 2. fit the model only on train features (documentation excerpt; keep synchronized)
+model.fit(self.train.features)
+```
+
+Validation uses the fitted model unchanged. Its scores select the threshold and the best validation artifact.
+
+```python
+# 3. score validation features without refitting (documentation excerpt; keep synchronized)
+return model.score(self.validation.features)
+```
+
+Testing reloads the selected fitted model and scores `test.features` without another fit call.
+
+```python
+# 4. score test features without refitting (documentation excerpt; keep synchronized)
+return model.score(test.features)
+```

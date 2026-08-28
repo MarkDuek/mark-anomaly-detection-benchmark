@@ -1,0 +1,27 @@
+---
+title: Credit Card
+description: Twenty-nine-feature credit card dataset from mTSBench.
+---
+
+The `creditcard` manifest uses the `PLAN-Lab/mTSBench` Hugging Face dataset repository at revision `9ea52adfa86373576f446a7f3f26395e506f1b8b`.
+
+## Splits
+
+| Split | Rows | Source file | Refined file |
+| --- | ---: | --- | --- |
+| Train | 56,804 | `creditcard/creditcard_train.csv` | `data/refined/creditcard/train.csv` |
+| Validation | 56,961 | `creditcard/creditcard_val.csv` | `data/refined/creditcard/validation.csv` |
+| Test | 170,885 | `creditcard/creditcard_test.csv` | `data/refined/creditcard/test.csv` |
+
+## Schema
+
+The raw schema has `timestamp`, feature columns `V1` through `V28` plus `Amount`, and binary `is_anomaly` labels. Refinement maps the features in declared order:
+
+| Raw columns | Refined columns | Role |
+| --- | --- | --- |
+| `timestamp` | `timestamp` | Timestamp |
+| `V1` through `V28` | `feature_0` through `feature_27` | Numeric features |
+| `Amount` | `feature_28` | Numeric feature |
+| `is_anomaly` | `label` | Binary anomaly label |
+
+The manifest stores SHA-256 checksums for every raw and refined split. The loader verifies the refined checksum before a protocol receives the split.

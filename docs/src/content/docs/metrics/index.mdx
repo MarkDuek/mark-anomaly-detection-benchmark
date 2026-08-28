@@ -3,7 +3,29 @@ title: Metrics
 description: Measures used to assess anomaly-detection results.
 ---
 
-The benchmark reports complementary metric families. Each answers a different question about anomaly-detection performance.
+The benchmark reports complementary metric families from the same labels and anomaly scores. Each answers a different question about anomaly-detection performance, so results should be compared within a metric rather than reduced to one universal score.
+
+## Evaluation Inputs
+
+Every evaluation receives aligned binary labels and anomaly scores. A threshold converts each score into a prediction: scores greater than or equal to the threshold are predicted as anomalies. The threshold is selected on validation data and then fixed for test evaluation.
+
+Some metric families use the scores directly and therefore do not depend on that threshold. Others use the fixed prediction vector. This separation keeps threshold selection from being influenced by test labels.
+
+| Family | Input | Reported values |
+| --- | --- | --- |
+| [Point](/metrics/point/) | Labels, scores, threshold | Precision, recall, F1 |
+| [Ranking](/metrics/ranking/) | Labels, scores | AUC-ROC, AUC-PR |
+| [Events](/metrics/events/) | Labels, predictions | Point-adjusted F1, event F1, range F1 |
+| [Affiliation](/metrics/affiliation/) | Labels, predictions | Affiliation precision, recall, F1 |
+| [VUS](/metrics/vus/) | Labels, scores or predictions | VUS-ROC, VUS-PR, VUS precision, recall, F1 |
+
+## How Results Are Assembled
+
+The evaluator creates one prediction vector from the fixed threshold. Point, event, affiliation, and prediction-based VUS metrics evaluate that vector. Ranking and score-based VUS metrics evaluate the original anomaly scores directly.
+
+Range F1 uses the configured range-recall existence weight. VUS uses its configured maximum extension window; score-based VUS also uses the configured number of threshold samples.
+
+Ranking AUC values are unavailable when labels contain only one class. The evaluator reports them as `null` rather than assigning a numeric value. Score-based VUS has the same requirement. Prediction metrics instead use their documented zero-denominator conventions.
 
 ## Metric Families
 
@@ -15,7 +37,3 @@ The benchmark reports complementary metric families. Each answers a different qu
   <a href="/metrics/vus/"><strong>VUS</strong><span>Use range-aware volume-under-surface measures.</span></a>
   <a href="/metrics/evaluation/"><strong>Evaluation</strong><span>Configure and assemble reported metric groups.</span></a>
 </div>
-
-## Next
-
-Point metrics are the first family to be documented in detail.
