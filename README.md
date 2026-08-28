@@ -17,20 +17,20 @@ This repository uses [mTSBench](https://github.com/PLAN-Lab/mTSBench) and [TSB-A
 ## Current Architecture
 
 ```text
-config/                         runtime logging configuration
-data/manifests/                 dataset contracts and provenance records
-docs/                           documentation source and static-site tooling
-experiments/                    reproducible experiment specifications
-src/mark_ad_benchmark/          benchmark implementation
-├── cli.py                      command dispatch
-├── experiment.py               train, validation, and test orchestration
-├── datasets/                   data acquisition, refinement, and schema validation
-├── metrics/                    benchmark metric calculation and assembly
-├── models/                     anomaly-score model implementations
-├── protocols/                  data-access policies for model execution
-├── thresholds/                 validation-based score-to-label calibration
-└── visualization/              saved-run exports for the documentation explorer
-tests/                          automated unit and integration coverage
+config/                         # runtime logging configuration
+data/manifests/                 # dataset contracts and provenance records
+docs/                           # documentation source and static-site tooling
+experiments/                    # reproducible experiment specifications
+src/mark_ad_benchmark/          # benchmark implementation
+├── cli.py                      # command dispatch
+├── experiment.py               # train, validation, and test orchestration
+├── datasets/                   # data acquisition, refinement, and schema validation
+├── metrics/                    # benchmark metric calculation and assembly
+├── models/                     # anomaly-score model implementations
+├── protocols/                  # data-access policies for model execution
+├── thresholds/                 # validation-based score-to-label calibration
+└── visualization/              # saved-run exports for the documentation explorer
+tests/                          # automated unit and integration coverage
 ```
 
 ## Requirements
