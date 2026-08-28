@@ -6,7 +6,6 @@ model:
     tolerance: 1.0e-5
     max_iterations: 1000
     score_norm: l1
-    feature_scaling: standard
   candidates:
     lambda:
     - 0.002

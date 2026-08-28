@@ -10,17 +10,17 @@ description: Train-scaled principal-component reconstruction residuals.
 | Parameter | Required value | Meaning |
 | --- | --- | --- |
 | `n_components` | Integer from `1` to one less than the feature width | Number of principal components retained for reconstruction. |
-| `feature_scaling` | `none` or `standard` | Whether to fit `StandardScaler` on training features before PCA. |
+| `standardize_features` | Boolean | Whether to fit `StandardScaler` on training features before PCA. |
 
-PCA itself centers its input. With `feature_scaling: standard`, the benchmark additionally uses [scikit-learn's `StandardScaler`](https://scikit-learn.org/stable/modules/generated/sklearn.preprocessing.StandardScaler.html) to scale every feature using training-split statistics. The fitted scaler is then reused unchanged for validation and test rows.
+PCA itself centers its input. With `standardize_features: true`, the benchmark additionally uses [scikit-learn's `StandardScaler`](https://scikit-learn.org/stable/modules/generated/sklearn.preprocessing.StandardScaler.html) to scale every feature using training-split statistics. The fitted scaler is then reused unchanged for validation and test rows.
 
 ```python
 # 1. configure PCA and optional train-fitted standardization (documentation excerpt; keep synchronized)
 self.n_components = n_components
-self.feature_scaling = feature_scaling
+self.standardize_features = standardize_features
 self.logger = logger
 self.pca = PCA(n_components=n_components)
-self.scaler = StandardScaler() if feature_scaling == "standard" else None
+self.scaler = StandardScaler() if standardize_features else None
 self.feature_width: int | None = None
 ```
 
@@ -75,7 +75,7 @@ Validated inductive runs persist the fitted PCA estimator, optional fitted scale
 pickle.dump(
     {
         "n_components": self.n_components,
-        "feature_scaling": self.feature_scaling,
+        "standardize_features": self.standardize_features,
         "feature_width": self.feature_width,
         "pca": self.pca,
         "scaler": self.scaler,
@@ -89,7 +89,7 @@ pickle.dump(
 model = cls(
     {
         "n_components": payload["n_components"],
-        "feature_scaling": payload["feature_scaling"],
+        "standardize_features": payload["standardize_features"],
     },
     logger,
 )

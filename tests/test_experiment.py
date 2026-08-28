@@ -51,7 +51,7 @@ def test_pca_training_and_testing_use_separate_artifacts(
                 "dataset": "example",
                 "model": {
                     "name": "pca",
-                    "parameters": {"n_components": 1, "feature_scaling": "standard"},
+                    "parameters": {"n_components": 1, "standardize_features": True},
                 },
                 "protocol": "inductive",
                 "training": {"epochs": 1},

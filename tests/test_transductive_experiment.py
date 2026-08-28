@@ -54,7 +54,6 @@ def test_transductive_experiment_uses_validation_and_test_without_train(
                         "tolerance": 1e-7,
                         "max_iterations": 10,
                         "score_norm": "l1",
-                        "feature_scaling": "standard",
                     },
                     "candidates": {"lambda": [0.5, 0.25]},
                 },

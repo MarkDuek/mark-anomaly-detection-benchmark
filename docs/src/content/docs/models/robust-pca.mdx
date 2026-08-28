@@ -13,7 +13,6 @@ description: Transductive low-rank plus sparse decomposition with L1 anomaly sco
 | `tolerance` | Positive number | Relative Frobenius-norm convergence tolerance. |
 | `max_iterations` | Positive integer | Maximum solver iterations. |
 | `score_norm` | `l1` | Row-wise norm used to produce anomaly scores. |
-| `feature_scaling` | `standard` | Standardize every feature in the input batch before decomposition. |
 
 ## Standardize
 
@@ -23,7 +22,7 @@ $$
 M_{ij} = \frac{X_{ij} - \mu_j}{\sigma_j}
 $$
 
-Here, $\mu_j$ and $\sigma_j$ are the mean and standard deviation of feature $j$ over that batch. The model requires a nonempty, finite two-dimensional input matrix.
+Here, $\mu_j$ and $\sigma_j$ are the mean and standard deviation of feature $j$ over that batch. This standardization is always applied and is not a configurable parameter. The model requires a nonempty, finite two-dimensional input matrix.
 
 ```python
 # 1. standardize the complete transductive feature batch (documentation excerpt; keep synchronized)

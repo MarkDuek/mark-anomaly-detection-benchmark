@@ -25,18 +25,18 @@ class PCAModel(InductiveAnomalyModel):
             message = "PCA requires at least one component"
             logger.error(message)
             raise ValueError(message)
-        feature_scaling = parameters.get("feature_scaling")
-        if feature_scaling not in {"none", "standard"}:
-            message = "PCA feature_scaling must be none or standard"
+        standardize_features = parameters.get("standardize_features")
+        if not isinstance(standardize_features, bool):
+            message = "PCA standardize_features must be a boolean"
             logger.error(message)
-            raise ValueError(message)
+            raise TypeError(message)
 
         # 1. configure PCA and optional train-fitted standardization (documentation excerpt; keep synchronized)
         self.n_components = n_components
-        self.feature_scaling = feature_scaling
+        self.standardize_features = standardize_features
         self.logger = logger
         self.pca = PCA(n_components=n_components)
-        self.scaler = StandardScaler() if feature_scaling == "standard" else None
+        self.scaler = StandardScaler() if standardize_features else None
         self.feature_width: int | None = None
 
     def fit(self, features: Sequence[Sequence[float]]) -> None:
@@ -89,7 +89,7 @@ class PCAModel(InductiveAnomalyModel):
             pickle.dump(
                 {
                     "n_components": self.n_components,
-                    "feature_scaling": self.feature_scaling,
+                    "standardize_features": self.standardize_features,
                     "feature_width": self.feature_width,
                     "pca": self.pca,
                     "scaler": self.scaler,
@@ -108,7 +108,7 @@ class PCAModel(InductiveAnomalyModel):
         model = cls(
             {
                 "n_components": payload["n_components"],
-                "feature_scaling": payload["feature_scaling"],
+                "standardize_features": payload["standardize_features"],
             },
             logger,
         )

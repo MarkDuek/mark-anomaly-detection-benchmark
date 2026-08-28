@@ -28,7 +28,7 @@ def test_pca_scores_reconstruction_residuals_through_inductive_protocol() -> Non
         logger.for_component("mark_ad_benchmark.protocols.inductive"),
     )
     model = PCAModel(
-        {"n_components": 1, "feature_scaling": "standard"},
+        {"n_components": 1, "standardize_features": True},
         logger.for_component("mark_ad_benchmark.models.pca"),
     )
 
@@ -53,7 +53,7 @@ def test_pca_scores_reconstruction_residuals_through_inductive_protocol() -> Non
 
 def test_pca_rejects_full_feature_reconstruction() -> None:
     model = PCAModel(
-        {"n_components": 2, "feature_scaling": "standard"},
+        {"n_components": 2, "standardize_features": True},
         Logger().for_component("mark_ad_benchmark.models.pca"),
     )
 
@@ -61,9 +61,9 @@ def test_pca_rejects_full_feature_reconstruction() -> None:
         model.fit(((0.0, 0.0), (1.0, 1.0)))
 
 
-def test_pca_uses_configured_feature_scaling() -> None:
+def test_pca_uses_configured_feature_standardization() -> None:
     logger = Logger().for_component("mark_ad_benchmark.models.pca")
-    model = PCAModel({"n_components": 1, "feature_scaling": "none"}, logger)
+    model = PCAModel({"n_components": 1, "standardize_features": False}, logger)
 
     model.fit(((0.0, 0.0), (1.0, 1.0), (2.0, 2.0)))
 
@@ -72,7 +72,7 @@ def test_pca_uses_configured_feature_scaling() -> None:
 
 def test_pca_save_and_load_preserves_scores(tmp_path: Path) -> None:
     logger = Logger().for_component("mark_ad_benchmark.models.pca")
-    model = PCAModel({"n_components": 1, "feature_scaling": "standard"}, logger)
+    model = PCAModel({"n_components": 1, "standardize_features": True}, logger)
     model.fit(((0.0, 0.0), (1.0, 1.0), (2.0, 2.0)))
     path = tmp_path / "model.pkl"
     model.save(path)

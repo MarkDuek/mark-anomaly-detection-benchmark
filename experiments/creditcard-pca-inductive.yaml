@@ -5,9 +5,9 @@ model:
   parameters:
     n_components: 5
   candidates:
-    feature_scaling:
-    - none
-    - standard
+    standardize_features:
+    - false
+    - true
 protocol: inductive
 training:
   epochs: 1

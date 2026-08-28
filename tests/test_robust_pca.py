@@ -18,7 +18,6 @@ def test_robust_pca_recovers_sparse_component_and_scores_its_row_l1_norm() -> No
             "tolerance": 1e-7,
             "max_iterations": 1000,
             "score_norm": "l1",
-            "feature_scaling": "standard",
         },
         Logger().for_component("mark_ad_benchmark.models.robust_pca"),
     )
@@ -40,7 +39,6 @@ def test_robust_pca_requires_explicit_solver_parameters() -> None:
                 "tolerance": 1e-7,
                 "max_iterations": 1000,
                 "score_norm": "l1",
-                "feature_scaling": "standard",
             },
             Logger().for_component("mark_ad_benchmark.models.robust_pca"),
         )

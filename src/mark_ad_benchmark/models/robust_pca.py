@@ -21,10 +21,6 @@ class RobustPCAModel(TransductiveAnomalyModel):
             message = "Robust PCA score_norm must be l1"
             logger.error(message)
             raise ValueError(message)
-        if parameters.get("feature_scaling") != "standard":
-            message = "Robust PCA feature_scaling must be standard"
-            logger.error(message)
-            raise ValueError(message)
         self.logger = logger
         self.low_rank_component: tuple[tuple[float, ...], ...] | None = None
         self.sparse_component: tuple[tuple[float, ...], ...] | None = None
