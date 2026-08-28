@@ -39,12 +39,6 @@ tests/                          deterministic unit and integration tests
 - `uv` for the benchmark environment; `make setup` installs it when needed
 - Node.js and npm only for the documentation site
 
-## Setup
-
-```sh
-make setup
-```
-
 ## Documentation Site
 
 Install the documentation dependencies and start the local Astro server:
@@ -64,33 +58,46 @@ npm run build
 
 ## Quick Start
 
+### Setup
+
+```sh
+make setup
+```
+
+### Download and Prepare a Dataset
+
 ```sh
 make prepare DATASET=calit2
+```
+
+### Run an Experiment
+
+```sh
 make run EXPERIMENT=calit2-pca-inductive
+make visualize
+```
+
+### Visualize a Saved Run
+
+```sh
 make visualize
 ```
 
 Detailed benchmark and documentation-site workflows are in the [Usage guide](docs/src/content/docs/usage.mdx).
 
-## Data Lifecycle
-
-Each manifest records a pinned Hugging Face revision, split paths, raw and refined schemas, and SHA-256 checksums.
-
-```text
-Hugging Face dataset revision
--> data/raw/<dataset-id>/
--> data/refined/<dataset-id>/
--> protocols, models, thresholds, and metrics
-```
-
-Raw and refined files are local artifacts and are not committed to Git.
-
 ## Development
 
-```sh
-make format
-make lint
-make test
-```
+- Use uv through the provided Make targets; do not use global pip or direct Python execution.
+- Keep uv.lock synchronized with pyproject.toml.
+- Validate raw data before it reaches models.
+- Register every module in config/logging.yaml and give operational modules a configured component logger; configured module levels must be info before committing.
+- Do not commit raw/refined data, model weights, or generated run artifacts.
+- Always run
 
-Do not commit raw or refined data, model artifacts, or generated run artifacts.
+    ```sh
+    make format
+    make lint
+    make test
+    ```
+
+    before committing.
