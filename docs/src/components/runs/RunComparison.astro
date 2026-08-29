@@ -15,15 +15,10 @@
   let runs = {};
   let sortColumn = null;
   let sortDirection = 1;
-  const entries = (run) => Object.entries(run.metric_groups).flatMap(([group, metrics]) => typeof metrics === "object" && metrics !== null ? Object.entries(metrics).map(([name, metric]) => [`${group.replaceAll("_", " ")} ${name.replaceAll("_", " ")}`, metric]) : [[group.replaceAll("_", " "), metrics]]);
+  const entries = (run) => Object.entries(run.metric_groups.point || run.metrics);
   const value = (metric) => metric == null ? "N/A" : Number(metric).toFixed(4);
   const formatDataset = (dataset) => dataset.replaceAll("-", " ").replace(/\b\w/g, (letter) => letter.toUpperCase());
-  const metricLabel = (name) => {
-    const groups = ["event affiliation", "event", "point", "ranking", "vus prediction", "vus ranking"];
-    const group = groups.find((candidate) => name.startsWith(candidate));
-    const measure = (group ? name.slice(group.length).trim() : name).replace("auc pr", "AUC-PR").replace("auc roc", "AUC-ROC").replace("f1", "F1");
-    return `${group || "Metric"}<br>${measure}`;
-  };
+  const metricLabel = (name) => `Point<br>${name.replace("f1", "F1")}`;
   const render = () => {
     const ids = [...options.querySelectorAll("input:checked")].map((input) => input.value);
     table.replaceChildren();
