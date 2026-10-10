@@ -1,0 +1,262 @@
+---
+title: Nyström Kernel PCA
+description: Landmark-approximated kernel PCA with train-centered component scores and reconstruction residuals.
+---
+
+`NystromKPCA` implements the eight steps of the supplied *Nyström Kernel Approximation* study as an inductive, in-memory estimator. The separate `NystromKPCAModel` adapter supplies anomaly scores and persistence to the benchmark. Neither class uses the existing full-kernel `KernelPCAModel` or scikit-learn's `KernelPCA`/`Nystroem` implementations. The only scikit-learn operations here are pairwise kernel evaluation and optional train-fitted input scaling.
+
+Let $X\in\mathbb R^{P\times D}$ contain training rows; if scaling is enabled, $X$ denotes the **scaled** rows. $M$ is the number of landmarks, $r$ is the number of retained landmark-kernel directions, and $K$ is the number of principal components. The estimator requires $1\le M<P$; this stricter bound prevents even the landmark kernel from becoming $P\times P$.
+
+## Parameters
+
+| Parameter | Default | Meaning |
+| --- | --- | --- |
+| `n_components` | `None` | Positive integer $K$, or all $r$ directions for full-reconstruction checks. An integer greater than the positive covariance rank raises. |
+| `n_landmarks` | `100` | Uniformly selected distinct training rows; must be less than $P$. |
+| `kernel`, `kernel_params` | `rbf`, `{gamma: 1.0}` | `linear` uses `{}`, `rbf` uses `gamma`, `poly` uses `gamma`, `degree`, `coef0` (defaults `1.0`, `2`, `1.0`). Unsupported parameters are rejected. |
+| `sampling` | `uniform` | Sampling without replacement; no other strategy is implemented yet. |
+| `nystrom_solver`, `pca_solver` | `eigh`, `eigh` | Each can independently be `eigh` or `svd`. |
+| `eigenvalue_strategy` | `truncate` | Only truncation is implemented; `clip` and `regularize` are not supported. |
+| `eigenvalue_tol`, `eigenvalue_tol_mode` | `1e-12`, `absolute` | Landmark-kernel truncation cutoff $\epsilon$; `relative` uses the tolerance times the largest landmark eigenvalue. |
+| `covariance_normalization` | `population` | Divide by $P$ (`population`) or $P-1$ (`sample`). |
+| `random_state` | `None` | Integer seed for reproducible landmark selection. |
+| `standardize_features` | `False` | Fit `StandardScaler` on training rows only and reuse it for later rows. |
+
+The public estimator has `fit(X_train)`, `fit_transform(X_train)`, and `transform(X_new)`. `fit_transform` returns training projections from the fit without reevaluating a kernel. The benchmark adapter instead exposes `fit`, `score`, `save`, and `load` to the inductive protocol.
+
+## 1. Select Landmarks
+
+Select $M$ distinct indices $I$ uniformly without replacement and set $L=X[I,:]\in\mathbb R^{M\times D}$. A local random generator makes repeated fits with the same seed reproducible. Landmark selection is a separate operation, so a future sampling method does not change the projection equations.
+
+```python
+indices = np.random.default_rng(seed).choice(len(matrix), count, replace=False)
+return matrix[indices]
+```
+
+```python
+_LANDMARK_SAMPLERS = {"uniform": _uniform_landmarks}
+```
+
+## 2. Define the Mapped Landmark Subspace
+
+For the kernel's implicit feature map $\phi$, the landmarks span
+
+$$
+\mathcal F_M=\operatorname{span}\{\phi(\ell_1),\ldots,\phi(\ell_M)\},
+\qquad r=\dim(\mathcal F_M)\le M.
+$$
+
+No mapped vectors are constructed. The positive eigenvectors of the landmark kernel in step 4 supply orthonormal coordinates in this subspace, up to the stated numerical cutoff.
+
+## 3. Evaluate the Observation–Landmark Kernels
+
+Kernel evaluation produces only
+
+$$
+(K_{XL})_{ij}=k(x_i,\ell_j)\in\mathbb R^{P\times M},
+\qquad
+(K_{LL})_{ij}=k(\ell_i,\ell_j)\in\mathbb R^{M\times M}.
+$$
+
+The implementation never calls the kernel on all pairs of training rows.
+
+```python
+landmarks = _LANDMARK_SAMPLERS[self.sampling](
+    matrix, self.n_landmarks, self.random_state
+)
+landmark_kernel = self._kernel_matrix(landmarks, landmarks)
+cross_kernel = self._kernel_matrix(matrix, landmarks)
+```
+
+## 4. Construct Orthonormal Nyström Coordinates
+
+For the landmark-kernel eigendecomposition $K_{LL}=V\Lambda V^\mathsf T$, retain only $\lambda_i>\epsilon$ and set
+
+$$
+W=V_r\Lambda_r^{-1/2}\in\mathbb R^{M\times r},
+\qquad Z=K_{XL}W\in\mathbb R^{P\times r}.
+$$
+
+The SVD option uses $K_{LL}=U\Sigma V^\mathsf T$ and $W=U_r\Sigma_r^{-1/2}$. For a positive semidefinite landmark kernel these factors give the same approximated inner products up to floating-point error and basis rotations. Both solver paths inspect the signed eigenvalues: values below $-\epsilon$ raise; directions at or below $\epsilon$ are discarded. If none remain, fitting raises. The SVD path does not mistake a substantially negative eigenvalue for a positive singular value.
+
+```python
+if self.nystrom_solver == "eigh":
+    values, vectors = np.linalg.eigh(landmark_kernel)
+    indices = np.argsort(values)[::-1]
+    values, vectors = values[indices], vectors[:, indices]
+    signed_values = values
+else:
+    signed_values = np.linalg.eigvalsh(landmark_kernel)
+    vectors, values, _ = np.linalg.svd(landmark_kernel, full_matrices=False)
+cutoff = self.eigenvalue_tol
+if self.eigenvalue_tol_mode == "relative":
+    cutoff *= max(0.0, float(np.max(signed_values)))
+if np.min(signed_values) < -cutoff:
+    self._fail("Nyström KPCA landmark kernel has negative eigenvalues")
+keep = values > cutoff
+if not np.any(keep):
+    self._fail("Nyström KPCA landmark kernel has no eigenvalues above cutoff")
+return vectors[:, keep] / np.sqrt(values[keep])
+```
+
+```python
+normalizer = self._normalizer(landmark_kernel)
+z = cross_kernel @ normalizer
+del cross_kernel, landmark_kernel
+```
+
+The approximate kernel identity is a **proof, not a production matrix operation**:
+
+$$
+ZZ^\mathsf T
+=K_{XL}V_r\Lambda_r^{-1}V_r^\mathsf T K_{XL}^\mathsf T
+=K_{XL}K_{LL,\epsilon}^{\dagger}K_{XL}^\mathsf T.
+$$
+
+Here $K_{LL,\epsilon}^{\dagger}$ is the pseudoinverse after truncation. It equals $K_{LL}^{\dagger}$ when the discarded eigenvalues are zero; otherwise the cutoff deliberately removes additional small positive directions. No $P\times P$ product is evaluated.
+
+## 5. Center the Coordinates
+
+Compute the training mean of each Nyström coordinate and center in place:
+
+$$
+\mu_Z=\frac1P\sum_{i=1}^{P}Z_{i,:},
+\qquad \widetilde Z=Z-\mathbf1_P\mu_Z.
+$$
+
+This is equivalent to centering the approximated Gram matrix, $\widehat K_c=\widetilde Z\widetilde Z^\mathsf T$, **without constructing** that matrix or a $P\times P$ centering operator.
+
+```python
+feature_mean = z.mean(axis=0)
+z -= feature_mean
+```
+
+## 6. Solve the Smaller Covariance Problem
+
+Set $d=P$ for population normalization or $d=P-1$ for sample normalization. With `pca_solver="eigh"`, the only covariance matrix formed is
+
+$$
+S_Z=\frac{\widetilde Z^\mathsf T\widetilde Z}{d}
+\in\mathbb R^{r\times r},
+\qquad S_Za_k=\lambda_k a_k.
+$$
+
+With `pca_solver="svd"`, a **thin** decomposition $\widetilde Z=Q\Sigma V^\mathsf T$ gives $S_Z=V\Sigma^2V^\mathsf T/d$ conceptually. Thus $a_k=V_{:,k}$ and $\lambda_k=\sigma_k^2/d$, without forming $S_Z$. Since $r\le M<P$, its thin left factor has shape $P\times r$, never $P\times P$.
+
+```python
+denominator = (
+    len(matrix)
+    if self.covariance_normalization == "population"
+    else len(matrix) - 1
+)
+if self.pca_solver == "eigh":
+    covariance = z.T @ z / denominator
+    eigenvalues, directions = np.linalg.eigh(covariance)
+    eigenvalues = eigenvalues[::-1]
+    directions = directions[:, ::-1]
+else:
+    _, singular_values, right = np.linalg.svd(z, full_matrices=False)
+    eigenvalues = singular_values**2 / denominator
+    directions = right.T
+```
+
+## 7. Select Principal Directions and Measure Variance
+
+The first $K$ directions form $A_K\in\mathbb R^{r\times K}$. An integer $K$ must not exceed $r$ **or** the positive-variance rank of centered $Z$; the latter uses a separate machine-precision cutoff, not the landmark eigenvalue tolerance. `n_components=None` retains all $r$ directions for checking full reconstruction. Zero total centered variance raises rather than producing undefined variance ratios.
+
+$$
+\text{feature\_total\_variance\_}=\operatorname{tr}(S_Z)
+=\frac{\lVert\widetilde Z\rVert_F^2}{d},
+\quad
+\text{feature\_explained\_variance\_}[k]=\lambda_k,
+\quad
+\text{feature\_explained\_variance\_ratio\_}[k]
+=\frac{\lambda_k}{\operatorname{tr}(S_Z)}.
+$$
+
+The denominator includes **all** $r$ directions, not just the selected $K$.
+
+```python
+total_variance = float(np.einsum("ij,ij->", z, z) / denominator)
+rank_tol = np.finfo(float).eps * max(z.shape) * max(0.0, float(eigenvalues[0]))
+if not math.isfinite(total_variance) or total_variance <= rank_tol:
+    self._fail("Nyström KPCA requires positive centered feature-space variance")
+if np.any(eigenvalues < -rank_tol):
+    self._fail("Nyström KPCA produced negative covariance eigenvalues")
+positive_rank = int(np.count_nonzero(eigenvalues > rank_tol))
+retained = z.shape[1] if self.n_components is None else self.n_components
+if retained > z.shape[1]:
+    self._fail("Nyström KPCA n_components exceeds landmark effective rank")
+if self.n_components is not None and retained > positive_rank:
+    self._fail("Nyström KPCA n_components exceeds positive covariance rank")
+```
+
+```python
+self.feature_total_variance_ = total_variance
+self.feature_explained_variance_ = np.maximum(eigenvalues[:retained], 0)
+self.feature_explained_variance_ratio_ = (
+    self.feature_explained_variance_ / total_variance
+)
+```
+
+## 8. Project the Observations
+
+Training component scores are $U=\widetilde ZA_K\in\mathbb R^{P\times K}$. There is no whitening or additional eigenvalue normalization.
+
+```python
+self.components_ = directions[:, :retained].copy()
+```
+
+```python
+projection = z @ self.components_
+```
+
+## Transform New Rows and Score Anomalies
+
+For $Q$ previously unseen rows, reuse fitted input scaling, landmarks $L$, normalization $W$, mean $\mu_Z$, and principal directions $A_K$:
+
+$$
+Z_{\mathrm{new}}=k(X_{\mathrm{new}},L)W,
+\quad
+U_{\mathrm{new}}=(Z_{\mathrm{new}}-\mu_Z)A_K
+\in\mathbb R^{Q\times K}.
+$$
+
+```python
+cross_kernel = self._kernel_matrix(matrix, self.landmarks_)
+centered = cross_kernel @ self.normalizer_ - self.feature_mean_
+```
+
+```python
+centered = self._centered_features(features)
+projection = centered @ self.components_
+```
+
+The benchmark needs one higher-is-more-anomalous value per row. Like the full KPCA model, its adapter uses Euclidean **reconstruction residuals**, but in the Nyström-approximated centered feature space:
+
+$$
+\operatorname{score}(x)
+=\lVert\widetilde z(x)-\widetilde z(x)A_KA_K^\mathsf T\rVert_2
+=\sqrt{\max(0,\lVert\widetilde z(x)\rVert_2^2-\lVert u(x)\rVert_2^2)}.
+$$
+
+The direct residual form avoids cancellation from subtracting nearly equal squared norms. The benchmark adapter rejects $K=r$ (including `None`) because complete reconstruction would give zero anomaly scores; the standalone estimator permits it for verification.
+
+```python
+centered = self.estimator._centered_features(features)
+projected = centered @ self.estimator.components_
+residuals = np.linalg.norm(
+    centered - projected @ self.estimator.components_.T, axis=1
+)
+```
+
+## Persisted State and Memory
+
+The benchmark saves the fitted scaler, landmark rows, $W$, $\mu_Z$, $A_K$, input width, and variance attributes, without the logger or entire training matrix. Loading reattaches the current process logger. Training stores $P\times M$, $M\times M$, $P\times r$, and $r\times r$ intermediates, with $O(PM+M^2+PK)$ memory excluding input storage; scoring additionally uses $Q\times r$ and $Q\times K$ arrays. It never forms $K_{XX}$, a $P\times P$ covariance/centering matrix, or a $P\times P$ SVD factor.
+
+## References
+
+- *Nyström Kernel Approximation*, supplied mathematical study, steps 1–8.
+- [Scikit-learn pairwise kernel functions](https://scikit-learn.org/stable/modules/metrics.html#kernel-functions).
+- [Scikit-learn Nyström approximation](https://scikit-learn.org/stable/modules/generated/sklearn.kernel_approximation.Nystroem.html), for comparison; its singular-value clipping differs from the truncation here.
+- [Hallgren's Nyström KPCA reference implementation](https://github.com/fredhallgren/nystrompca).

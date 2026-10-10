@@ -9,5 +9,6 @@ Models transform multivariate feature rows into higher-is-more-anomalous scores.
 
 <div class="documentation-map">
   <a href="/models/pca/"><strong>PCA</strong><span>Train-split principal-component reconstruction residuals.</span></a>
+  <a href="/models/nystrom-kpca/"><strong>Nyström KPCA</strong><span>Landmark-approximated kernel PCA with feature-space reconstruction residuals.</span></a>
   <a href="/models/robust-pca/"><strong>Robust PCA</strong><span>Batch low-rank plus sparse decomposition with L1 anomaly scores.</span></a>
 </div>
