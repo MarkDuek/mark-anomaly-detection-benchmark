@@ -1,6 +1,15 @@
 pca:
   module: mark_ad_benchmark.models.pca
   class: PCAModel
+kernel_pca:
+  module: mark_ad_benchmark.models.kernel_pca
+  class: KernelPCAModel
+nystrom_kpca:
+  module: mark_ad_benchmark.models.nystrom_kpca
+  class: NystromKPCAModel
+convolutional_pca:
+  module: mark_ad_benchmark.models.convolutional_pca
+  class: ConvolutionalPCAModel
 robust_pca:
   module: mark_ad_benchmark.models.robust_pca
   class: RobustPCAModel

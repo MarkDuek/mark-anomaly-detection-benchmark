@@ -1,0 +1,32 @@
+id: creditcard-kernel-pca-inductive-validation-f1-quantile
+dataset: creditcard
+model:
+  name: kernel_pca
+  parameters:
+    n_components: 5
+    standardize_features: true
+  candidates:
+  - kernel: linear
+    kernel_parameters: {}
+  - kernel: poly
+    kernel_parameters:
+      gamma: 0.03333333333333333
+      degree: 2
+      coef0: 1.0
+  - kernel: rbf
+    kernel_parameters:
+      gamma: 0.03333333333333333
+protocol: inductive
+training:
+  epochs: 1
+threshold:
+  name: validation_f1_quantile
+selection:
+  metric: f1
+  direction: maximize
+metrics:
+  vus:
+    max_window: 100
+    threshold_samples: 250
+  range:
+    recall_existence_weight: 0.2

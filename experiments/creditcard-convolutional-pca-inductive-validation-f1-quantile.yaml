@@ -1,0 +1,30 @@
+id: creditcard-convolutional-pca-inductive-validation-f1-quantile
+dataset: creditcard
+model:
+  name: convolutional_pca
+  parameters:
+    n_components: 13
+    filter_order: 10
+    standardize_features: false
+    step_size: 0.2
+    max_iterations: 200
+  candidates:
+    filter_order:
+    - 0
+    - 1
+    - 3
+    - 10
+protocol: inductive
+training:
+  epochs: 1
+threshold:
+  name: validation_f1_quantile
+selection:
+  metric: f1
+  direction: maximize
+metrics:
+  vus:
+    max_window: 100
+    threshold_samples: 250
+  range:
+    recall_existence_weight: 0.2

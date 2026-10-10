@@ -1,0 +1,26 @@
+id: calit2-linear-parity-nystrom-kpca-64-landmarks-inductive
+dataset: calit2
+model:
+  name: nystrom_kpca
+  parameters:
+    n_components: 1
+    n_landmarks: 64
+    kernel: linear
+    kernel_params: {}
+    standardize_features: false
+    random_state: 42
+    eigenvalue_tol_mode: relative
+protocol: inductive
+training:
+  epochs: 1
+threshold:
+  name: validation_f1_quantile
+selection:
+  metric: f1
+  direction: maximize
+metrics:
+  vus:
+    max_window: 100
+    threshold_samples: 250
+  range:
+    recall_existence_weight: 0.2

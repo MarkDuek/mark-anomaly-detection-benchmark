@@ -9,8 +9,9 @@ from mark_ad_benchmark.experiment import Experiment
 from mark_ad_benchmark.logging import ConsoleOutput, Logger
 
 
-def test_pca_training_and_testing_use_separate_artifacts(
-    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+@pytest.mark.parametrize("model_name", ["pca", "kernel_pca", "convolutional_pca"])
+def test_inductive_training_and_testing_use_separate_artifacts(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str], model_name: str
 ) -> None:
     refined_dir = tmp_path / "refined" / "example"
     refined_dir.mkdir(parents=True)
@@ -50,8 +51,16 @@ def test_pca_training_and_testing_use_separate_artifacts(
                 "id": "example-pca-inductive",
                 "dataset": "example",
                 "model": {
-                    "name": "pca",
-                    "parameters": {"n_components": 1, "standardize_features": True},
+                    "name": model_name,
+                    "parameters": {
+                        "n_components": 1,
+                        "standardize_features": True,
+                        **{
+                            "pca": {},
+                            "kernel_pca": {"kernel": "linear"},
+                            "convolutional_pca": {"filter_order": 0},
+                        }[model_name],
+                    },
                 },
                 "protocol": "inductive",
                 "training": {"epochs": 1},
@@ -119,6 +128,17 @@ def test_pca_training_and_testing_use_separate_artifacts(
     assert json.loads((testing.run_dir / "metrics.json").read_text())["test"]["event"][
         "event_f1"
     ] == pytest.approx(1.0)
+    validation_diagnostics = json.loads(
+        (validated.run_dir / "metrics.json").read_text()
+    )["model_diagnostics"]
+    test_diagnostics = json.loads((testing.run_dir / "metrics.json").read_text())[
+        "model_diagnostics"
+    ]
+    assert test_diagnostics == validation_diagnostics
+    if model_name == "convolutional_pca":
+        assert test_diagnostics["converged"] is True
+    else:
+        assert test_diagnostics == {}
 
 
 @pytest.mark.parametrize(
@@ -159,6 +179,42 @@ def test_experiment_rejects_unknown_model_or_protocol_before_loading_data(
             Logger().for_component("mark_ad_benchmark.experiment"),
             manifest_root=tmp_path / "missing",
         )
+
+
+def test_explicit_parameter_candidates_override_base_parameters() -> None:
+    experiment = Experiment.from_path(
+        Path("experiments/creditcard-kernel-pca-inductive-validation-f1-quantile.yaml"),
+        Logger().for_component("mark_ad_benchmark.experiment"),
+    )
+    experiment.definition["model"]["candidates"] = [
+        {"kernel": "linear", "n_components": 2},
+        {"kernel": "rbf", "kernel_parameters": {"gamma": 0.5}},
+    ]
+    experiment.validate_definition()
+
+    assert experiment.model_parameter_candidates() == (
+        {"n_components": 2, "standardize_features": True, "kernel": "linear"},
+        {
+            "n_components": 5,
+            "standardize_features": True,
+            "kernel": "rbf",
+            "kernel_parameters": {"gamma": 0.5},
+        },
+    )
+
+
+@pytest.mark.parametrize(
+    "candidates", [[], ["linear"], [{1: "linear"}], None, {"kernel": []}]
+)
+def test_rejects_invalid_parameter_candidates(candidates: object) -> None:
+    experiment = Experiment.from_path(
+        Path("experiments/creditcard-kernel-pca-inductive-validation-f1-quantile.yaml"),
+        Logger().for_component("mark_ad_benchmark.experiment"),
+    )
+    experiment.definition["model"]["candidates"] = candidates
+
+    with pytest.raises(TypeError, match="model.candidates"):
+        experiment.validate_definition()
 
 
 def write_split(path: Path, rows: tuple[tuple[int, int, int], ...]) -> None:

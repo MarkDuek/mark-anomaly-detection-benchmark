@@ -14,6 +14,9 @@ component_levels:
   mark_ad_benchmark.experiment: info
   mark_ad_benchmark.models.base: info
   mark_ad_benchmark.models.pca: info
+  mark_ad_benchmark.models.kernel_pca: info
+  mark_ad_benchmark.models.nystrom_kpca: info
+  mark_ad_benchmark.models.convolutional_pca: info
   mark_ad_benchmark.metrics.point: info
   mark_ad_benchmark.protocols.base: info
   mark_ad_benchmark.protocols.inductive: info

@@ -444,11 +444,19 @@ class Experiment:
             self.logger.error(message)
             raise TypeError(message)
         candidates = model.get("candidates", {})
-        if not isinstance(candidates, dict) or any(
-            not isinstance(name, str) or not isinstance(values, list) or not values
-            for name, values in candidates.items()
-        ):
-            message = "Experiment model.candidates must map names to nonempty lists"
+        if isinstance(candidates, list):
+            valid_candidates = bool(candidates) and all(
+                isinstance(candidate, dict)
+                and all(isinstance(name, str) for name in candidate)
+                for candidate in candidates
+            )
+        else:
+            valid_candidates = isinstance(candidates, dict) and all(
+                isinstance(name, str) and isinstance(values, list) and bool(values)
+                for name, values in candidates.items()
+            )
+        if not valid_candidates:
+            message = "Experiment model.candidates must map names to nonempty lists or be a nonempty list of parameter mappings"
             self.logger.error(message)
             raise TypeError(message)
         selection = self.definition.get("selection")
@@ -507,12 +515,14 @@ class Experiment:
         )
 
     def model_parameter_candidates(self) -> tuple[dict[str, object], ...]:
-        """Return the Cartesian product of explicit validation candidates."""
+        """Expand a parameter grid or merge explicit candidates with base parameters."""
         model = self.definition["model"]
         parameters = model["parameters"]
         candidates = model.get("candidates", {})
         if not candidates:
             return (dict(parameters),)
+        if isinstance(candidates, list):
+            return tuple({**parameters, **candidate} for candidate in candidates)
         names = tuple(candidates)
         return tuple(
             {**parameters, **dict(zip(names, values, strict=True))}
@@ -556,10 +566,8 @@ class Experiment:
         return MetricSettings(max_window, samples, float(existence_weight))
 
     def model_diagnostics(self, model: object) -> dict[str, object]:
-        """Return batch-model diagnostics while preserving inductive artifacts."""
-        if self.execution_mode == "transductive":
-            return dict(model.diagnostics)
-        return {}
+        """Return diagnostics exposed by the selected model."""
+        return dict(getattr(model, "diagnostics", {}))
 
     def load_dataset_manifest(self) -> tuple[Path, dict[str, object]]:
         """Load the dataset manifest referenced by this experiment."""

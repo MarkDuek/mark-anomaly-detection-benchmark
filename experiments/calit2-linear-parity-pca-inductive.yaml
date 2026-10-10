@@ -1,0 +1,21 @@
+id: calit2-linear-parity-pca-inductive
+dataset: calit2
+model:
+  name: pca
+  parameters:
+    n_components: 1
+    standardize_features: false
+protocol: inductive
+training:
+  epochs: 1
+threshold:
+  name: validation_f1_quantile
+selection:
+  metric: f1
+  direction: maximize
+metrics:
+  vus:
+    max_window: 100
+    threshold_samples: 250
+  range:
+    recall_existence_weight: 0.2
