@@ -6,7 +6,7 @@ from tqdm import tqdm
 
 from mark_ad_benchmark.logging import ComponentLogger
 from mark_ad_benchmark.metrics.events import EventMetrics, event_metrics
-from mark_ad_benchmark.metrics.point import PointMetrics, calculate_point_metrics
+from mark_ad_benchmark.metrics.point import PointMetrics, point_metrics, validate_inputs
 from mark_ad_benchmark.metrics.ranking import RankingMetrics, ranking_metrics
 from mark_ad_benchmark.metrics.vus import (
     VusPredictionMetrics,
@@ -31,21 +31,6 @@ class EvaluationMetrics:
     vus_ranking: VusRankingMetrics
     vus_prediction: VusPredictionMetrics
 
-    @property
-    def precision(self) -> float:
-        """Expose point precision for existing result consumers."""
-        return self.point.precision
-
-    @property
-    def recall(self) -> float:
-        """Expose point recall for existing result consumers."""
-        return self.point.recall
-
-    @property
-    def f1(self) -> float:
-        """Expose point F1 for existing selection behavior."""
-        return self.point.f1
-
 
 def evaluate_metrics(
     labels: Sequence[int],
@@ -55,6 +40,8 @@ def evaluate_metrics(
     logger: ComponentLogger,
 ) -> EvaluationMetrics:
     """Evaluate ranking and frozen-prediction metric families together."""
+    point_logger = logger.for_component("mark_ad_benchmark.metrics.point")
+    validate_inputs(labels, scores, point_logger)
     predictions = tuple(int(score >= threshold) for score in scores)
     with tqdm(
         total=1,
@@ -63,7 +50,7 @@ def evaluate_metrics(
         leave=False,
         disable=not sys.stderr.isatty(),
     ) as progress:
-        point = calculate_point_metrics(labels, scores, threshold)
+        point = point_metrics(labels, predictions, point_logger)
         progress.update()
     with tqdm(
         total=1,

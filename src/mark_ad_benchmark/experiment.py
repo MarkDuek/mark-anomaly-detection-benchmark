@@ -17,7 +17,6 @@ from mark_ad_benchmark.metrics import (
     MetricSettings,
     PointMetrics,
     evaluate_metrics,
-    point_metrics,
 )
 from mark_ad_benchmark.metrics.ranking import ranking_curves
 from mark_ad_benchmark.models import InductiveAnomalyModel, TransductiveAnomalyModel
@@ -262,12 +261,8 @@ class Experiment:
             scores = protocol.score_validation(model)
         else:
             scores = protocol.fit_score_validation(model)
-        metrics_logger = self.logger.for_component("mark_ad_benchmark.metrics.point")
         selector = self.threshold_type(self.logger.for_component(self.threshold_module))
         threshold = selector.fit(scores, protocol.validation.labels)
-        point = point_metrics(
-            protocol.validation.labels, scores, threshold, metrics_logger
-        )
         metrics = evaluate_metrics(
             protocol.validation.labels,
             scores,
@@ -275,7 +270,7 @@ class Experiment:
             self.metric_settings(),
             self.logger.for_component("mark_ad_benchmark.metrics.evaluation"),
         )
-        selection_value = getattr(point, self.definition["selection"]["metric"])
+        selection_value = getattr(metrics.point, self.definition["selection"]["metric"])
         self.logger.info(
             f"Validated epoch {epoch}: {self.definition['selection']['metric']}={selection_value}"
         )
@@ -369,12 +364,6 @@ class Experiment:
         selector.load_state(threshold_state)
         threshold = selector.threshold_for(scores)
         self.logger.info(f"Applied threshold to test scores: {threshold}")
-        point_metrics(
-            test_split.labels,
-            scores,
-            threshold,
-            self.logger.for_component("mark_ad_benchmark.metrics.point"),
-        )
         metrics = evaluate_metrics(
             test_split.labels,
             scores,
@@ -415,7 +404,7 @@ class Experiment:
             },
         )
         self.logger.info(
-            f"Completed test phase: test_f1={metrics.f1}, run_dir={run_dir}"
+            f"Completed test phase: test_f1={metrics.point.f1}, run_dir={run_dir}"
         )
         return TestResult(run_dir, threshold, metrics)
 

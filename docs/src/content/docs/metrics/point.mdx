@@ -3,11 +3,19 @@ title: Point Metrics
 description: Pointwise anomaly-classification measures.
 ---
 
-Point metrics evaluate every timestamp independently. They compare binary ground-truth labels with predictions obtained from anomaly scores at one fixed threshold.
+Point metrics evaluate every timestamp independently. The evaluator converts anomaly scores to binary predictions once at the applied threshold, then passes the same predictions to point and event metrics.
+
+## Parameters
+
+| Parameter | Type | Description |
+| --- | --- | --- |
+| `labels` | `Sequence[int]` | $y_t$: one label per timestamp; `0` for normal, `1` for anomaly. |
+| `predictions` | `Sequence[int]` | $\hat y_t$: binary predictions at the applied threshold; `0` for normal, `1` for anomaly. |
+| `logger` | `ComponentLogger` | Records the resulting point precision, recall, and F1. |
 
 ## Inputs
 
-For each timestamp $t$, the benchmark requires a binary label $y_t \in \{0, 1\}$ and a finite anomaly score $s_t$. Given threshold $\tau$, it predicts an anomaly when:
+For each timestamp $t$, the benchmark requires a binary label $y_t \in \{0, 1\}$ and a finite anomaly score $s_t$. Given the selected threshold $\tau$, `evaluate_metrics()` predicts an anomaly when:
 
 $$
 \hat{y}_t = \begin{cases}
@@ -16,23 +24,29 @@ $$
 \end{cases}
 $$
 
-The label and score sequences must have equal length. The threshold is selected on validation data and then kept fixed while evaluating test data.
+The evaluator applies the threshold once and shares the resulting vector with threshold-dependent metric families:
+
+```python
+predictions = tuple(int(score >= threshold) for score in scores)
+```
+
+The label and score sequences must have equal length, labels must be binary, and scores must be finite; the evaluator checks these before thresholding. The selector is calibrated on validation data and derives the test threshold without test labels; the effective threshold stays fixed during each evaluation. Model selection uses the resulting `metrics.point` rather than recalculating point metrics.
 
 The implementation begins by counting true positives, false positives, and false negatives:
 
 ```python
-def calculate_point_metrics(
-    labels: Sequence[int], scores: Sequence[float], threshold: float
+def point_metrics(
+    labels: Sequence[int], predictions: Sequence[int], logger: ComponentLogger
 ) -> PointMetrics:
     # 1. count confusion-matrix values (documentation excerpt; keep synchronized)
     true_positives = sum(
-        label == 1 and score >= threshold for label, score in zip(labels, scores)
+        label == 1 and prediction == 1 for label, prediction in zip(labels, predictions)
     )
     false_positives = sum(
-        label == 0 and score >= threshold for label, score in zip(labels, scores)
+        label == 0 and prediction == 1 for label, prediction in zip(labels, predictions)
     )
     false_negatives = sum(
-        label == 1 and score < threshold for label, score in zip(labels, scores)
+        label == 1 and prediction == 0 for label, prediction in zip(labels, predictions)
     )
 ```
 

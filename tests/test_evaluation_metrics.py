@@ -66,6 +66,27 @@ def test_evaluation_uses_the_supplied_frozen_threshold() -> None:
     assert metrics.event.event_f1 == 0.0
 
 
+@pytest.mark.parametrize(
+    ("labels", "scores", "message"),
+    [
+        ((0, 1), (0.1,), "equal lengths"),
+        ((0, 2), (0.1, 0.9), "binary labels"),
+        ((0, 1), (0.1, float("nan")), "finite scores"),
+    ],
+)
+def test_evaluation_validates_inputs_before_thresholding(
+    labels, scores, message
+) -> None:
+    with pytest.raises(ValueError, match=message):
+        evaluate_metrics(
+            labels,
+            scores,
+            0.5,
+            MetricSettings(0, 2, 0.2),
+            Logger().for_component("mark_ad_benchmark.metrics.evaluation"),
+        )
+
+
 def test_vus_at_zero_window_matches_perfect_point_predictions() -> None:
     labels = (0, 1, 1, 0)
     scores = (0.1, 0.9, 0.8, 0.2)

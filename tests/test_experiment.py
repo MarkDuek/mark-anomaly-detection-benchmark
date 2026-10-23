@@ -93,9 +93,9 @@ def test_inductive_training_and_testing_use_separate_artifacts(
     assert "[INFO] Completed validation phase:" in output
     assert validated.validation.threshold == pytest.approx(3**0.5)
     assert (
-        validated.validation.metrics.precision,
-        validated.validation.metrics.recall,
-        validated.validation.metrics.f1,
+        validated.validation.metrics.point.precision,
+        validated.validation.metrics.point.recall,
+        validated.validation.metrics.point.f1,
     ) == pytest.approx((1.0, 1.0, 1.0))
     assert (validated.run_dir / "model.pkl").is_file()
     assert (validated.run_dir / "validation_scores.csv").is_file()
@@ -122,9 +122,9 @@ def test_inductive_training_and_testing_use_separate_artifacts(
     assert "[INFO] Scoring test data with selected validation configuration:" in output
     assert "[INFO] Completed test phase:" in output
     assert (
-        testing.test_metrics.precision,
-        testing.test_metrics.recall,
-        testing.test_metrics.f1,
+        testing.test_metrics.point.precision,
+        testing.test_metrics.point.recall,
+        testing.test_metrics.point.f1,
     ) == pytest.approx((1.0, 1.0, 1.0))
     assert (testing.run_dir / "test_scores.csv").is_file()
     test_curves = json.loads((testing.run_dir / "ranking_curves.json").read_text())

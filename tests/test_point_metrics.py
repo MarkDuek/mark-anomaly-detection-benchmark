@@ -17,7 +17,8 @@ def test_validation_f1_threshold_applies_to_point_metrics() -> None:
     logger = Logger().for_component("mark_ad_benchmark.metrics.point")
 
     threshold = BestF1ThresholdSelector(logger).fit(scores, labels)
-    metrics = point_metrics(labels, scores, threshold, logger)
+    predictions = tuple(int(score >= threshold) for score in scores)
+    metrics = point_metrics(labels, predictions, logger)
 
     assert threshold == 0.6
     assert (metrics.precision, metrics.recall, metrics.f1) == pytest.approx(

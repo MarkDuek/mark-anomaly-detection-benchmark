@@ -337,4 +337,4 @@ def test_benchmark_train_and_test_with_saved_model(tmp_path: Path) -> None:
     result = experiment.run("nystrom-run")
     assert (result.validated.run_dir / "model.pkl").is_file()
     assert (result.test.run_dir / "test_scores.csv").is_file()
-    assert result.test.test_metrics.f1 >= 0
+    assert result.test.test_metrics.point.f1 >= 0
