@@ -3,15 +3,7 @@ from mark_ad_benchmark.models.base import (
     InductiveAnomalyModel,
     TransductiveAnomalyModel,
 )
-from mark_ad_benchmark.models.convolutional_pca import ConvolutionalPCAModel
-from mark_ad_benchmark.models.kernel_pca import KernelPCAModel, KernelType
-from mark_ad_benchmark.models.nystrom_kpca import (
-    NystromKernelType,
-    NystromKPCA,
-    NystromKPCAModel,
-)
 from mark_ad_benchmark.models.pca import PCAModel
-from mark_ad_benchmark.models.robust_pca import RobustPCAModel
 
 __all__ = [
     "AnomalyModel",
@@ -26,3 +18,23 @@ __all__ = [
     "RobustPCAModel",
     "TransductiveAnomalyModel",
 ]
+
+
+def __getattr__(name: str):
+    if name == "ConvolutionalPCAModel":
+        from mark_ad_benchmark.models.convolutional_pca import ConvolutionalPCAModel
+
+        return ConvolutionalPCAModel
+    if name in {"KernelPCAModel", "KernelType"}:
+        from mark_ad_benchmark.models import kernel_pca
+
+        return getattr(kernel_pca, name)
+    if name in {"NystromKPCA", "NystromKPCAModel", "NystromKernelType"}:
+        from mark_ad_benchmark.models import nystrom_kpca
+
+        return getattr(nystrom_kpca, name)
+    if name == "RobustPCAModel":
+        from mark_ad_benchmark.models.robust_pca import RobustPCAModel
+
+        return RobustPCAModel
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
