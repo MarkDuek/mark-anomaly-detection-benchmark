@@ -259,6 +259,8 @@ body:has(.runs-page) :where(main) {
 .run-configuration th { color: var(--text-muted); font-size: 0.8125rem; text-align: left; white-space: nowrap; width: 11rem; }
 .run-configuration td { font-family: var(--sl-font-mono); font-size: 0.75rem; overflow-wrap: anywhere; }
 #plot { border-bottom: 1px solid var(--border); margin: 1.5rem 0 2.5rem; }
+.run-curve-plots:not([hidden]) { display: grid; gap: 1rem; grid-template-columns: repeat(auto-fit, minmax(min(100%, 25rem), 1fr)); }
+.run-curve-plots > div { aspect-ratio: 3 / 4; margin-top: 0; min-height: 465px; min-width: 0; }
 .comparison-options { align-items: center; gap: 0.5rem 1rem; margin-bottom: 1rem; }
 .comparison-scroll { overflow-x: auto; }
 .comparison-scroll table { font-size: 0.75rem; min-width: 100%; table-layout: fixed; }

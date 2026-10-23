@@ -7,6 +7,7 @@ import yaml
 
 from mark_ad_benchmark.datasets.ingest import sha256
 from mark_ad_benchmark.logging import ConsoleOutput, Logger
+from mark_ad_benchmark.metrics.ranking import ranking_curves
 from mark_ad_benchmark.visualization import timeseries, visualize_runs
 
 
@@ -86,11 +87,26 @@ def test_visualization_exports_saved_test_run(
         json.dumps(
             {
                 "threshold": 0.5,
-                "test": {"precision": 1.0, "recall": 1.0, "f1": 1.0},
+                "test": {
+                    "point": {"precision": 1.0, "recall": 1.0, "f1": 1.0},
+                    "ranking": {"auc_roc": 1.0, "auc_pr": 1.0},
+                },
                 "model_diagnostics": {"iterations": 1},
             }
         )
     )
+    (validated_dir / "metrics.json").write_text(
+        json.dumps(
+            {
+                "threshold": 0.6,
+                "validation": {"ranking": {"auc_roc": 1.0, "auc_pr": 1.0}},
+            }
+        )
+    )
+    for directory, threshold in ((validated_dir, 0.6), (test_dir, 0.5)):
+        (directory / "ranking_curves.json").write_text(
+            json.dumps(ranking_curves((0, 1), (0.2, 0.8), threshold))
+        )
 
     output_path = visualize_runs(
         Logger(ConsoleOutput()).for_component(
@@ -112,6 +128,12 @@ def test_visualization_exports_saved_test_run(
     assert exported_run["dataset_id"] == "example"
     assert exported_run["run_time"] is None
     assert exported_run["feature_labels"] == {"feature_0": "feature_0"}
+    assert exported_run["curves_url"] == "run-curves/test-run.json"
+    assert "curves" not in exported_run
+    curves = json.loads((tmp_path / exported_run["curves_url"]).read_text())
+    assert curves["validation"]["threshold"] == 0.6
+    assert curves["test"]["threshold"] == 0.5
+    assert curves["validation"]["curves"]["roc"]["tpr"][-1] == 1.0
     assert exported_run["configuration"] == {
         "model": "pca",
         "configured_parameters": {"n_components": 1},
@@ -125,6 +147,19 @@ def test_visualization_exports_saved_test_run(
         "model_diagnostics": {"iterations": 1},
     }
 
+    (validated_dir / "ranking_curves.json").unlink()
+    with pytest.raises(
+        FileNotFoundError, match="Ranking curves not found: .*regenerate"
+    ):
+        visualize_runs(
+            Logger().for_component("mark_ad_benchmark.visualization.timeseries"),
+            manifest_root,
+            tmp_path / "refined",
+            runs_root,
+            tmp_path / "missing" / "runs.json",
+        )
+    assert not (tmp_path / "missing" / "runs.json").exists()
+
 
 def test_visualization_sampling_retains_anomalies(
     monkeypatch: pytest.MonkeyPatch,
@@ -136,3 +171,43 @@ def test_visualization_sampling_retains_anomalies(
     assert len(indexes) <= 5
     assert 2 in indexes
     assert 6 in indexes
+
+
+def test_curve_export_keeps_corners_and_saved_data(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    curves = {
+        "roc": {
+            "fpr": [0, 0.1, 0.2, 0.3, 0.4, 0.5, 1],
+            "tpr": [0, 0.5, 0.5, 0.5, 0.5, 1, 1],
+        },
+        "pr": {
+            "recall": [1, 1, 0.5, 0.5, 0.5, 0, 0],
+            "precision": [1, 0.9, 0.8, 0.7, 0.6, 0.5, 0.4],
+        },
+        "operating_point": {"fpr": 0.2, "tpr": 0.5, "recall": 0.5, "precision": 0.8},
+    }
+    (tmp_path / "ranking_curves.json").write_text(json.dumps(curves))
+    (tmp_path / "metrics.json").write_text(
+        json.dumps({"threshold": 10, "test": {"ranking": {"auc_roc": 0.8}}})
+    )
+    logger = Logger().for_component("mark_ad_benchmark.visualization.timeseries")
+
+    exported = timeseries.load_run_curves(tmp_path, "test", logger)
+    assert exported["curves"]["roc"] == {
+        key: [points[index] for index in (0, 1, 4, 5, 6)]
+        for key, points in curves["roc"].items()
+    }
+    assert exported["curves"]["pr"] == {
+        key: [points[index] for index in (0, 1, 2, 4, 5, 6)]
+        for key, points in curves["pr"].items()
+    }
+    assert exported["curves"]["operating_point"] == curves["operating_point"]
+    assert exported["ranking"] == {"auc_roc": 0.8}
+    assert json.loads((tmp_path / "ranking_curves.json").read_text()) == curves
+
+    monkeypatch.setattr(timeseries, "MAX_DISPLAY_POINTS", 3)
+    capped = timeseries.load_run_curves(tmp_path, "test", logger)["curves"]
+    assert len(capped["roc"]["fpr"]) == len(capped["pr"]["recall"]) == 3
+    assert capped["roc"]["fpr"][0] == 0
+    assert capped["roc"]["fpr"][-1] == 1

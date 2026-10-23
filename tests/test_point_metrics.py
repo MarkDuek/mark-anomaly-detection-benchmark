@@ -4,6 +4,7 @@ import pytest
 
 from mark_ad_benchmark.logging import Logger
 from mark_ad_benchmark.metrics import point_metrics
+from mark_ad_benchmark.metrics.ranking import ranking_curves
 from mark_ad_benchmark.thresholds import (
     BestF1ThresholdSelector,
     ValidationF1QuantileThresholdSelector,
@@ -43,3 +44,9 @@ def test_validation_f1_quantile_preserves_prediction_rate_across_scores() -> Non
 
     assert validation_threshold == 0.6
     assert test_threshold == 0.5
+    assert ranking_curves((0, 1, 1, 0), (0.1, 0.8, 0.6, 0.4), validation_threshold)[
+        "operating_point"
+    ] == {"fpr": 0.0, "tpr": 1.0, "recall": 1.0, "precision": 1.0}
+    assert ranking_curves(
+        (0, 1, 0, 1, 0, 0), (0.2, 0.9, 0.7, 0.5, 0.3, 0.1), test_threshold
+    )["operating_point"] == {"fpr": 0.25, "tpr": 1.0, "recall": 1.0, "precision": 2 / 3}

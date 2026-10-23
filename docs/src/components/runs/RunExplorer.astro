@@ -13,6 +13,14 @@
       <table><tbody id="configuration-details"></tbody></table>
     </section>
     <div id="plot" aria-label="Synchronized experiment signals, anomaly score, prediction, and ground truth"></div>
+    <section aria-labelledby="ranking-heading">
+      <h3 id="ranking-heading">Ranking curves</h3>
+      <p id="curve-status" role="status">Loading curves…</p>
+      <div id="curve-plots" class="run-curve-plots" hidden>
+        <div id="roc-plot" role="img" aria-label="Validation and test ROC curves with threshold markers"></div>
+        <div id="pr-plot" role="img" aria-label="Validation and test precision–recall curves with threshold markers"></div>
+      </div>
+    </section>
   </section>
 </section>
 
@@ -24,7 +32,10 @@
   const status = document.querySelector("#run-status");
   const selectedRun = document.querySelector("#selected-run");
   const configurationDetails = document.querySelector("#configuration-details");
+  const curveStatus = document.querySelector("#curve-status");
+  const curvePlots = document.querySelector("#curve-plots");
   let runs = {};
+  let curveRequest;
 
   const entries = (run) => Object.entries(run.metric_groups).flatMap(([group, metrics]) =>
     typeof metrics === "object" && metrics !== null
@@ -128,11 +139,64 @@
     });
   }
 
+  async function renderCurves(run) {
+    curveRequest?.abort();
+    const request = new AbortController();
+    curveRequest = request;
+    curvePlots.hidden = true;
+    curveStatus.textContent = "Loading curves…";
+    try {
+      const response = await fetch(`${import.meta.env.BASE_URL}${run.curves_url}`, { signal: request.signal });
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      const data = await response.json();
+      if (request.signal.aborted) return;
+      const unavailable = [];
+      let hasCurves = false;
+      const colors = { validation: "#a21caf", test: "#4d7c0f" };
+      curvePlots.hidden = false;
+      for (const [plotId, curveName, xName, yName, metricName, title, shape] of [
+        ["roc-plot", "roc", "fpr", "tpr", "auc_roc", "ROC · false positive rate / true positive rate", "linear"],
+        ["pr-plot", "pr", "recall", "precision", "auc_pr", "PR · recall / precision", "hv"],
+      ]) {
+        const traces = ["validation", "test"].flatMap((split) => {
+          const { curves, ranking, threshold } = data[split];
+          if (!curves[curveName]) {
+            if (!unavailable.includes(split)) unavailable.push(split);
+            return [];
+          }
+          hasCurves = true;
+          const point = curves.operating_point;
+          const label = split[0].toUpperCase() + split.slice(1);
+          const cutoff = threshold === null ? "∞" : value(threshold);
+          const coordinates = `${xName.replaceAll("_", " ")}: %{x:.3f}<br>${yName.replaceAll("_", " ")}: %{y:.3f}`;
+          return [
+            { x: curves[curveName][xName], y: curves[curveName][yName], type: curves[curveName][xName].length > 5000 ? "scattergl" : "scatter", mode: "lines", name: `${label} · ${metricName === "auc_pr" ? "AP" : "AUC"} ${value(ranking[metricName])}`, hovertemplate: `${label}<br>${coordinates}<extra></extra>`, line: { color: colors[split], shape } },
+            { x: [point[xName]], y: [point[yName]], type: "scatter", mode: "markers", name: `${label} threshold`, hovertemplate: `${label} threshold ${cutoff}<br>${coordinates}<extra></extra>`, marker: { color: colors[split], size: 12, symbol: "diamond" } },
+          ];
+        });
+        if (!traces.length) continue;
+        await Plotly.react(document.querySelector(`#${plotId}`), traces, {
+          title: { text: title },
+          xaxis: { title: { text: xName.replaceAll("_", " ") }, range: [-0.02, 1.02], hoverformat: ".3f" },
+          yaxis: { title: { text: yName.replaceAll("_", " ") }, range: [-0.02, 1.02] },
+          hovermode: "x unified",
+          hoverlabel: { bgcolor: "#ffffff", bordercolor: "#e5e7eb", font: { color: "#111827" } },
+          legend: { orientation: "v", x: 0, y: -0.32, yanchor: "top" }, margin: { t: 65, b: 165, l: 65, r: 20 },
+        }, { responsive: true, displaylogo: false });
+        if (request.signal.aborted) return;
+      }
+      curveStatus.textContent = unavailable.length ? `${unavailable.join(" and ")} curves: N/A (single-class labels).` : "";
+      curvePlots.hidden = !hasCurves;
+    } catch (error) {
+      if (!request.signal.aborted) curveStatus.textContent = "Could not load ranking curves for this run.";
+    }
+  }
+
   function renderRun() {
     const id = selector.value; const run = runs[id];
     document.querySelector("#experiment-id").textContent = run.display_name; document.querySelector("#run-id").textContent = `${run.run_time}  ${id}`;
     featureOptions.replaceChildren(...Object.keys(run.features).map((feature, index) => { const label = document.createElement("label"); label.innerHTML = `<input type="checkbox" value="${feature}" ${index < 4 ? "checked" : ""}><span>${rawFeatureName(run, feature)} <small>(${feature})</small></span>`; label.querySelector("input").addEventListener("change", () => renderPlot(run)); return label; }));
-    renderMetrics(run); renderConfiguration(run); renderPlot(run);
+    renderMetrics(run); renderConfiguration(run); renderPlot(run); renderCurves(run);
   }
 
   document.querySelector("#select-all").addEventListener("click", () => { featureOptions.querySelectorAll("input").forEach((input) => input.checked = true); renderPlot(runs[selector.value]); });

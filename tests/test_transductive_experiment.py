@@ -95,6 +95,12 @@ def test_transductive_experiment_uses_validation_and_test_without_train(
     assert test_metrics["model_diagnostics"]["iterations"] == 0
     assert validated_manifest["selected_model_parameters"]["lambda"] == 0.5
     assert model_lambdas == [0.5, 0.25, 0.5]
+    assert json.loads((validated.run_dir / "ranking_curves.json").read_text()) == {
+        "roc": None,
+        "pr": None,
+        "operating_point": None,
+    }
+    assert (tested.run_dir / "ranking_curves.json").is_file()
 
 
 def write_split(path: Path, rows: tuple[tuple[int, int, int], ...]) -> None:

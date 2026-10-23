@@ -1,5 +1,6 @@
 import csv
 import json
+import math
 import re
 from datetime import UTC, datetime
 from pathlib import Path
@@ -32,8 +33,17 @@ def visualize_runs(
     run_label = "run" if len(test_run_ids) == 1 else "runs"
     logger.info(f"Exporting {len(test_run_ids)} saved test {run_label}")
     runs: dict[str, dict[str, object]] = {}
+    curve_assets: dict[str, dict[str, object]] = {}
     for index, test_run_id in enumerate(test_run_ids, start=1):
         logger.info(f"Exporting test run {index}/{len(test_run_ids)}: {test_run_id}")
+        test_dir = runs_root / test_run_id
+        test_manifest = json.loads((test_dir / "manifest.json").read_text())
+        curve_assets[test_run_id] = {
+            "validation": load_run_curves(
+                runs_root / test_manifest["validated_run"], "validation", logger
+            ),
+            "test": load_run_curves(test_dir, "test", logger),
+        }
         runs[test_run_id] = load_run_data(
             test_run_id,
             logger,
@@ -41,6 +51,13 @@ def visualize_runs(
             refined_root,
             runs_root,
             datasets,
+        )
+        runs[test_run_id]["curves_url"] = f"run-curves/{test_run_id}.json"
+    curves_dir = docs_output_path.parent / "run-curves"
+    curves_dir.mkdir(parents=True, exist_ok=True)
+    for test_run_id, curves in curve_assets.items():
+        (curves_dir / f"{test_run_id}.json").write_text(
+            json.dumps(curves, allow_nan=False), encoding="utf-8"
         )
     docs_output_path.parent.mkdir(parents=True, exist_ok=True)
     docs_output_path.write_text(
@@ -50,6 +67,45 @@ def visualize_runs(
         f"Wrote documentation run data for {len(runs)} test {run_label}: {docs_output_path}"
     )
     return docs_output_path
+
+
+def load_run_curves(
+    run_dir: Path, split: str, logger: ComponentLogger
+) -> dict[str, object]:
+    path = run_dir / "ranking_curves.json"
+    if not path.is_file():
+        message = f"Ranking curves not found: {path}; regenerate this run"
+        logger.error(message)
+        raise FileNotFoundError(message)
+    metrics = json.loads((run_dir / "metrics.json").read_text())
+    threshold = metrics["threshold"]
+    curves = json.loads(path.read_text())
+    for name, axis in (("roc", "tpr"), ("pr", "recall")):
+        curve = curves[name]
+        if curve is None:
+            continue
+        values = curve[axis]
+        indexes = [
+            index
+            for index in range(len(values))
+            if index == 0
+            or index == len(values) - 1
+            or values[index] != values[index - 1]
+            or values[index] != values[index + 1]
+        ]
+        if len(indexes) > MAX_DISPLAY_POINTS:
+            indexes = [
+                indexes[index * (len(indexes) - 1) // (MAX_DISPLAY_POINTS - 1)]
+                for index in range(MAX_DISPLAY_POINTS)
+            ]
+        curves[name] = {
+            key: [points[index] for index in indexes] for key, points in curve.items()
+        }
+    return {
+        "curves": curves,
+        "ranking": metrics[split]["ranking"],
+        "threshold": threshold if math.isfinite(threshold) else None,
+    }
 
 
 def is_test_run(run_dir: Path) -> bool:

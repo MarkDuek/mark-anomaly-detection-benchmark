@@ -19,6 +19,7 @@ from mark_ad_benchmark.metrics import (
     evaluate_metrics,
     point_metrics,
 )
+from mark_ad_benchmark.metrics.ranking import ranking_curves
 from mark_ad_benchmark.models import InductiveAnomalyModel, TransductiveAnomalyModel
 
 
@@ -188,6 +189,12 @@ class Experiment:
             run_dir / "validation_scores.csv",
             "validation",
             protocol.validation,
+            best_validation.scores,
+            best_validation.threshold,
+        )
+        write_ranking_curves(
+            run_dir / "ranking_curves.json",
+            protocol.validation.labels,
             best_validation.scores,
             best_validation.threshold,
         )
@@ -379,6 +386,9 @@ class Experiment:
         run_dir = self.runs_root / test_run_id
         run_dir.mkdir(parents=True, exist_ok=False)
         write_scores(run_dir / "test_scores.csv", "test", test_split, scores, threshold)
+        write_ranking_curves(
+            run_dir / "ranking_curves.json", test_split.labels, scores, threshold
+        )
         (run_dir / "metrics.json").write_text(
             json.dumps(
                 {
@@ -612,6 +622,14 @@ def create_run_id(experiment_id: str) -> str:
 
 def write_manifest(path: Path, content: dict[str, object]) -> None:
     path.write_text(json.dumps(content, indent=2, sort_keys=True) + "\n")
+
+
+def write_ranking_curves(
+    path: Path, labels: tuple[int, ...], scores: tuple[float, ...], threshold: float
+) -> None:
+    path.write_text(
+        json.dumps(ranking_curves(labels, scores, threshold), allow_nan=False) + "\n"
+    )
 
 
 def write_scores(

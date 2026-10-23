@@ -99,6 +99,10 @@ def test_inductive_training_and_testing_use_separate_artifacts(
     ) == pytest.approx((1.0, 1.0, 1.0))
     assert (validated.run_dir / "model.pkl").is_file()
     assert (validated.run_dir / "validation_scores.csv").is_file()
+    validation_curves = json.loads(
+        (validated.run_dir / "ranking_curves.json").read_text()
+    )
+    assert validation_curves["operating_point"]["precision"] == pytest.approx(1.0)
     assert json.loads((validated.run_dir / "metrics.json").read_text())["validation"][
         "ranking"
     ]["auc_roc"] == pytest.approx(1.0)
@@ -123,6 +127,8 @@ def test_inductive_training_and_testing_use_separate_artifacts(
         testing.test_metrics.f1,
     ) == pytest.approx((1.0, 1.0, 1.0))
     assert (testing.run_dir / "test_scores.csv").is_file()
+    test_curves = json.loads((testing.run_dir / "ranking_curves.json").read_text())
+    assert test_curves["operating_point"]["recall"] == pytest.approx(1.0)
     assert (testing.run_dir / "metrics.json").is_file()
     assert (testing.run_dir / "manifest.json").is_file()
     assert json.loads((testing.run_dir / "metrics.json").read_text())["test"]["event"][
