@@ -3,18 +3,13 @@ dataset: creditcard
 model:
   name: pca
   parameters:
-    n_components: 5
+    n_components: 13
+    standardize_features: false
   candidates:
     n_components:
-    - 1
-    - 2
-    - 3
-    - 5
-    - 8
     - 13
-    standardize_features:
-    - false
-    - true
+    - 20
+    - 26
 protocol: inductive
 training:
   epochs: 1

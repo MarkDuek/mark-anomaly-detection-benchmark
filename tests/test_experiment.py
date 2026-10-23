@@ -189,7 +189,7 @@ def test_experiment_rejects_unknown_model_or_protocol_before_loading_data(
 
 def test_explicit_parameter_candidates_override_base_parameters() -> None:
     experiment = Experiment.from_path(
-        Path("experiments/creditcard-kernel-pca-inductive-validation-f1-quantile.yaml"),
+        Path("experiments/calit2-kernel-pca-inductive.yaml"),
         Logger().for_component("mark_ad_benchmark.experiment"),
     )
     experiment.definition["model"]["candidates"] = [
@@ -199,9 +199,14 @@ def test_explicit_parameter_candidates_override_base_parameters() -> None:
     experiment.validate_definition()
 
     assert experiment.model_parameter_candidates() == (
-        {"n_components": 2, "standardize_features": True, "kernel": "linear"},
         {
-            "n_components": 5,
+            "n_components": 2,
+            "standardize_features": True,
+            "kernel_parameters": {},
+            "kernel": "linear",
+        },
+        {
+            "n_components": 1,
             "standardize_features": True,
             "kernel": "rbf",
             "kernel_parameters": {"gamma": 0.5},
@@ -214,13 +219,58 @@ def test_explicit_parameter_candidates_override_base_parameters() -> None:
 )
 def test_rejects_invalid_parameter_candidates(candidates: object) -> None:
     experiment = Experiment.from_path(
-        Path("experiments/creditcard-kernel-pca-inductive-validation-f1-quantile.yaml"),
+        Path("experiments/calit2-kernel-pca-inductive.yaml"),
         Logger().for_component("mark_ad_benchmark.experiment"),
     )
     experiment.definition["model"]["candidates"] = candidates
 
     with pytest.raises(TypeError, match="model.candidates"):
         experiment.validate_definition()
+
+
+def test_creditcard_tuning_candidates() -> None:
+    logger = Logger().for_component("mark_ad_benchmark.experiment")
+    fixed = Experiment.from_path(
+        Path("experiments/creditcard-pca-inductive-validation-f1.yaml"), logger
+    )
+    quantile = Experiment.from_path(
+        Path("experiments/creditcard-pca-inductive-validation-f1-quantile.yaml"),
+        logger,
+    )
+    assert {
+        **fixed.definition,
+        "id": quantile.definition["id"],
+        "threshold": quantile.definition["threshold"],
+    } == quantile.definition
+    assert [
+        candidate["n_components"] for candidate in fixed.model_parameter_candidates()
+    ] == [
+        13,
+        20,
+        26,
+    ]
+
+    nystrom = Experiment.from_path(
+        Path(
+            "experiments/creditcard-nystrom-kpca-inductive-kernels-validation-f1-quantile.yaml"
+        ),
+        logger,
+    )
+    candidates = nystrom.model_parameter_candidates()
+    assert {
+        kernel: [
+            candidate["n_components"]
+            for candidate in candidates
+            if candidate["kernel"] == kernel
+        ]
+        for kernel in ("linear", "poly", "rbf")
+    } == {
+        "linear": [5, 13, 20, 26],
+        "poly": [5, 13, 20, 26],
+        "rbf": [5, 13, 20, 26, 32, 48],
+    }
+    for candidate in candidates:
+        nystrom.create_model(candidate)
 
 
 def write_split(path: Path, rows: tuple[tuple[int, int, int], ...]) -> None:

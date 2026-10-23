@@ -301,18 +301,9 @@ def test_unfitted_model_cannot_score_or_save(tmp_path: Path) -> None:
         kernel_pca.save(tmp_path / "model.pkl")
 
 
-@pytest.mark.parametrize(
-    "experiment_id",
-    [
-        "calit2-kernel-pca-inductive",
-        "creditcard-kernel-pca-inductive-validation-f1-quantile",
-    ],
-)
-def test_checked_in_experiments_resolve_all_three_kernel_candidates(
-    experiment_id: str,
-) -> None:
+def test_checked_in_experiment_resolves_all_three_kernel_candidates() -> None:
     experiment = Experiment.from_path(
-        Path("experiments") / f"{experiment_id}.yaml",
+        Path("experiments/calit2-kernel-pca-inductive.yaml"),
         Logger().for_component("mark_ad_benchmark.experiment"),
     )
     models = tuple(
@@ -321,13 +312,10 @@ def test_checked_in_experiments_resolve_all_three_kernel_candidates(
     )
 
     assert tuple(candidate.kernel for candidate in models) == tuple(KernelType)
-    gamma = (
-        1.0 if experiment_id == "calit2-kernel-pca-inductive" else 0.03333333333333333
-    )
     assert tuple(candidate.kernel_parameters for candidate in models) == (
         {},
-        {"gamma": gamma, "degree": 2, "coef0": 1.0},
-        {"gamma": gamma},
+        {"gamma": 1.0, "degree": 2, "coef0": 1.0},
+        {"gamma": 1.0},
     )
     assert all(isinstance(candidate, KernelPCAModel) for candidate in models)
     assert experiment.execution_mode == "inductive"

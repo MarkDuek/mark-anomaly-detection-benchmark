@@ -15,6 +15,14 @@ model:
     kernel_params: {}
     n_components: 13
     standardize_features: false
+  - kernel: linear
+    kernel_params: {}
+    n_components: 20
+    standardize_features: false
+  - kernel: linear
+    kernel_params: {}
+    n_components: 26
+    standardize_features: false
   - kernel: poly
     kernel_params:
       gamma: 0.03333333333333333
@@ -28,6 +36,50 @@ model:
       degree: 2
       coef0: 1.0
     n_components: 13
+    standardize_features: true
+  - kernel: poly
+    kernel_params:
+      gamma: 0.03333333333333333
+      degree: 2
+      coef0: 1.0
+    n_components: 20
+    standardize_features: true
+  - kernel: poly
+    kernel_params:
+      gamma: 0.03333333333333333
+      degree: 2
+      coef0: 1.0
+    n_components: 26
+    standardize_features: true
+  - kernel: rbf
+    kernel_params:
+      gamma: 0.03333333333333333
+    n_components: 5
+    standardize_features: true
+  - kernel: rbf
+    kernel_params:
+      gamma: 0.03333333333333333
+    n_components: 13
+    standardize_features: true
+  - kernel: rbf
+    kernel_params:
+      gamma: 0.03333333333333333
+    n_components: 20
+    standardize_features: true
+  - kernel: rbf
+    kernel_params:
+      gamma: 0.03333333333333333
+    n_components: 26
+    standardize_features: true
+  - kernel: rbf
+    kernel_params:
+      gamma: 0.03333333333333333
+    n_components: 32
+    standardize_features: true
+  - kernel: rbf
+    kernel_params:
+      gamma: 0.03333333333333333
+    n_components: 48
     standardize_features: true
 protocol: inductive
 training:
