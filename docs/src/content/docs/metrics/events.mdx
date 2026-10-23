@@ -3,26 +3,48 @@ title: Event Metrics
 description: Metrics for contiguous anomaly events.
 ---
 
-Event metrics evaluate one fixed binary prediction vector against binary labels. An event is a contiguous positive range, represented by its inclusive start and end indices. The benchmark reports point-adjusted F1, event F1, and range F1 from those ranges.
+Event metrics evaluate how many **events**, not timestamps, overlap. The evaluator converts anomaly scores to binary predictions once at the applied threshold and shares that vector with point and event metrics.
 
-The evaluator calculates every event metric family from the same frozen predictions:
+## Parameters
+
+| Parameter | Type | Description |
+| --- | --- | --- |
+| `labels` | `Sequence[int]` | $y_t$: `0` for normal, `1` for anomaly. |
+| `predictions` | `Sequence[int]` | $\hat y_t$: `0` for normal, `1` for predicted anomaly. |
+
+## Inputs
+
+For each timestamp $t$, the benchmark requires a binary label $y_t \in \{0, 1\}$ and a finite anomaly score $s_t$. Given the selected threshold $\tau$, `evaluate_metrics()` predicts an anomaly when:
+
+$$
+\hat{y}_t = \begin{cases}
+1 & \text{if } s_t \geq \tau \\
+0 & \text{otherwise}
+\end{cases}
+$$
+
+The evaluator applies the threshold once and shares the resulting vector with threshold-dependent metric families:
 
 ```python
-# 1. calculate event metric families from frozen predictions (documentation excerpt; keep synchronized)
-adjusted = point_adjust_predictions(labels, predictions)
-point_adjusted_f1 = f1(labels, adjusted)
-precision = point_precision(labels, predictions)
-event_recall = event_hit_recall(labels, predictions)
-range_precision = range_score(predictions, labels, 0.0)
-range_recall = range_score(labels, predictions, recall_existence_weight)
+predictions = tuple(int(score >= threshold) for score in scores)
 ```
 
-## Event Ranges
+## Events
 
-For binary sequence $v$, an event is a maximal interval $[a, b]$ where $v_t = 1$ for every $a \leq t \leq b$. Adjacent positive timestamps belong to the same event.
+An event is a maximal contiguous interval of positive timestamps. The ground-truth and predicted events are:
+
+$$
+\mathcal A=\{A_1,\ldots,A_N\}, \qquad A_i=[a_i,b_i],
+$$
+
+$$
+\hat{\mathcal A}=\{\hat A_1,\ldots,\hat A_M\}, \qquad \hat A_j=[\hat a_j,\hat b_j].
+$$
+
+Each interval includes both endpoints; indices start at zero. Adjacent positive timestamps form one event.
 
 ```python
-# 2. identify contiguous positive event ranges (documentation excerpt; keep synchronized)
+# 1. extract maximal contiguous events (documentation excerpt; keep synchronized)
 result = []
 start: int | None = None
 for index, value in enumerate(values):
@@ -36,100 +58,85 @@ if start is not None:
 return tuple(result)
 ```
 
-## Point-Adjusted F1
+## Overlap
 
-Point adjustment gives full credit for a labeled event once any timestamp inside it is predicted anomalous. For every true event $R$, if $\sum_{t \in R}\hat{y}_t > 0$, the adjusted prediction is set to one for all $t \in R$:
+Events overlap when:
 
 $$
-\tilde{y}_t = 1 \quad \forall t \in R
+A_i\cap\hat A_j\ne\varnothing
+\quad\Longleftrightarrow\quad
+a_i\le\hat b_j\;\text{and}\;\hat a_j\le b_i.
 $$
 
-The reported value is ordinary point F1 between labels $y$ and adjusted predictions $\tilde{y}$.
+One overlapping timestamp is sufficient; matching is not one-to-one.
 
 ```python
-# 3. expand every detected true event across its full range (documentation excerpt; keep synchronized)
-adjusted = list(predictions)
-for start, end in ranges(labels):
-    if any(predictions[start : end + 1]):
-        adjusted[start : end + 1] = [1] * (end - start + 1)
-return tuple(adjusted)
+# 2. check whether two events share a timestamp (documentation excerpt; keep synchronized)
+return first[0] <= second[1] and second[0] <= first[1]
 ```
 
-## Event F1
+## Event Precision
 
-Event F1 combines ordinary point precision with event-hit recall. A true event is hit when at least one prediction occurs within its range:
-
-$$
-\mathrm{event\ recall} =
-\frac{\#\{R \in \mathcal{R}_{true}: \exists t \in R, \hat{y}_t = 1\}}
-{\lvert\mathcal{R}_{true}\rvert}
-$$
-
-The result is the harmonic mean of point precision and event recall:
+Each predicted event receives one hit if it overlaps **any** true event. Precision is the fraction of predicted events that hit:
 
 $$
-\mathrm{event\ F1} =
-\frac{2 \cdot \mathrm{point\ precision} \cdot \mathrm{event\ recall}}
-{\mathrm{point\ precision} + \mathrm{event\ recall}}
+d(\hat A_j)=\mathbf1\big(\exists A_i:A_i\cap\hat A_j\ne\varnothing\big),
+\qquad P_E=\frac{1}{M}\sum_{j=1}^{M}d(\hat A_j).
 $$
-
-Event recall is `0.0` when there are no true events.
 
 ```python
-# 4. calculate the fraction of true events hit by predictions (documentation excerpt; keep synchronized)
-true_ranges = ranges(labels)
+# 3. average hits across predicted events (documentation excerpt; keep synchronized)
 return (
-    sum(any(predictions[start : end + 1]) for start, end in true_ranges)
-    / len(true_ranges)
-    if true_ranges
+    sum(
+        any(_events_overlap(predicted, true) for true in true_events)
+        for predicted in predicted_events
+    )
+    / len(predicted_events)
+    if predicted_events
     else 0.0
 )
 ```
 
-## Range F1
+## Event Recall
 
-Range F1 scores every reference event using three terms. For reference event $R$, let $O(R)$ be the positive ranges of comparison vector $q$ that overlap it.
-
-$$
-\mathrm{existence}(R) = \begin{cases}1 & \text{if } O(R) \neq \varnothing \\ 0 & \text{otherwise}\end{cases}
-$$
+Each true event receives one hit if **any** predicted event overlaps it. Recall is the fraction of true events detected:
 
 $$
-\mathrm{coverage}(R) = \frac{\sum_{t \in R} q_t}{|R|},
-\qquad
-\mathrm{cardinality}(R) = \begin{cases}\frac{1}{|O(R)|} & \text{if } O(R) \neq \varnothing \\ 0 & \text{otherwise}\end{cases}
+d(A_i)=\mathbf1\big(\exists\hat A_j:A_i\cap\hat A_j\ne\varnothing\big),
+\qquad R_E=\frac{1}{N}\sum_{i=1}^{N}d(A_i).
 $$
-
-For existence weight $w$, the range score averages:
-
-$$
-w \cdot \mathrm{existence}(R)
-+ (1 - w) \cdot \mathrm{coverage}(R) \cdot \mathrm{cardinality}(R)
-$$
-
-Range precision uses predicted events as references and labels as $q$, with $w = 0$. Range recall uses true events as references and predictions as $q$, with configured `recall_existence_weight`. Range F1 is their harmonic mean. All current experiment definitions set `recall_existence_weight` to `0.2`.
 
 ```python
-# 5. score each reference event by existence, coverage, and cardinality (documentation excerpt; keep synchronized)
-reference_ranges = ranges(references)
-predicted_ranges = ranges(predictions)
-if not reference_ranges:
-    return 0.0
-total = 0.0
-for start, end in reference_ranges:
-    overlaps = [
-        predicted
-        for predicted in predicted_ranges
-        if predicted[0] <= end and start <= predicted[1]
-    ]
-    existence = float(bool(overlaps))
-    covered = sum(predictions[start : end + 1]) / (end - start + 1)
-    cardinality = 1 / len(overlaps) if overlaps else 0.0
-    total += (
-        existence_weight * existence
-        + (1 - existence_weight) * covered * cardinality
+# 4. average hits across true events (documentation excerpt; keep synchronized)
+return (
+    sum(
+        any(_events_overlap(true, predicted) for predicted in predicted_events)
+        for true in true_events
     )
-return total / len(reference_ranges)
+    / len(true_events)
+    if true_events
+    else 0.0
+)
+```
+
+## Event F1
+
+Event F1 is the harmonic mean of event precision and event recall:
+
+$$
+F_{1,E}=\frac{2P_ER_E}{P_E+R_E}.
+$$
+
+Precision is `0.0` when there are no predicted events; recall is `0.0` when there are no true events. F1 is `0.0` when both components are zero.
+
+```python
+# 5. assemble study-defined event metrics (documentation excerpt; keep synchronized)
+true_events = extract_events(labels)
+predicted_events = extract_events(predictions)
+precision = event_precision(true_events, predicted_events)
+recall = event_recall(true_events, predicted_events)
+f1 = 2 * precision * recall / (precision + recall) if precision + recall else 0.0
+return EventMetrics(precision, recall, f1)
 ```
 
 ## Reference

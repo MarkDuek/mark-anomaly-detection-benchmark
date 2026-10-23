@@ -1,8 +1,11 @@
+from dataclasses import asdict
+
 import pytest
 from sklearn.metrics import auc
 
 from mark_ad_benchmark.logging import Logger
 from mark_ad_benchmark.metrics.evaluation import MetricSettings, evaluate_metrics
+from mark_ad_benchmark.metrics.point import point_metrics
 from mark_ad_benchmark.metrics.ranking import ranking_curves, ranking_metrics
 from mark_ad_benchmark.metrics.vus import vus_prediction_metrics, vus_ranking_metrics
 
@@ -63,7 +66,50 @@ def test_evaluation_uses_the_supplied_frozen_threshold() -> None:
     )
 
     assert metrics.point.f1 == 0.0
-    assert metrics.event.event_f1 == 0.0
+    assert metrics.event.f1 == 0.0
+    assert metrics.range.f1 == 0.0
+    assert set(asdict(metrics)) == {
+        "point",
+        "ranking",
+        "event",
+        "range",
+        "affiliation",
+        "vus_ranking",
+        "vus_prediction",
+    }
+    assert set(asdict(metrics.event)) == {"precision", "recall", "f1"}
+    assert set(asdict(metrics.range)) == {"f1"}
+    assert set(asdict(metrics.point)) == {"precision", "recall", "f1"}
+    assert set(asdict(metrics.affiliation)) == {"precision", "recall", "f1"}
+
+
+def test_point_and_event_metrics_share_thresholded_predictions() -> None:
+    labels = (0, 1, 1, 0, 0, 1, 0)
+    scores = (0.1, 0.5, 0.7, 0.1, 0.1, 0.5, 0.1)
+    threshold = 0.7
+    metrics = evaluate_metrics(
+        labels,
+        scores,
+        threshold,
+        MetricSettings(0, 2, 0.2),
+        Logger().for_component("mark_ad_benchmark.metrics.evaluation"),
+    )
+
+    assert metrics.point == point_metrics(
+        labels,
+        (0, 0, 1, 0, 0, 0, 0),
+        Logger().for_component("mark_ad_benchmark.metrics.point"),
+    )
+    assert (
+        metrics.point.precision,
+        metrics.point.recall,
+        metrics.point.f1,
+    ) == pytest.approx((1.0, 1 / 3, 0.5))
+    assert (
+        metrics.event.precision,
+        metrics.event.recall,
+        metrics.event.f1,
+    ) == pytest.approx((1.0, 0.5, 2 / 3))
 
 
 @pytest.mark.parametrize(

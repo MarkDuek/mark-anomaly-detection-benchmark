@@ -1,4 +1,3 @@
-import math
 from collections.abc import Sequence
 from dataclasses import dataclass
 
@@ -12,27 +11,11 @@ class PointMetrics:
     f1: float
 
 
-def validate_inputs(
-    labels: Sequence[int], scores: Sequence[float], logger: ComponentLogger
-) -> None:
-    if len(labels) != len(scores):
-        message = "Labels and scores must have equal lengths"
-        logger.error(message)
-        raise ValueError(message)
-    if any(label not in {0, 1} for label in labels):
-        message = "Point metrics require binary labels"
-        logger.error(message)
-        raise ValueError(message)
-    if any(not math.isfinite(score) for score in scores):
-        message = "Point metrics require finite scores"
-        logger.error(message)
-        raise ValueError(message)
-
-
 def point_metrics(
     labels: Sequence[int], predictions: Sequence[int], logger: ComponentLogger
 ) -> PointMetrics:
     """Calculate point precision, recall, and F1 from binary predictions."""
+
     # 1. count confusion-matrix values (documentation excerpt; keep synchronized)
     true_positives = sum(
         label == 1 and prediction == 1 for label, prediction in zip(labels, predictions)
@@ -61,4 +44,5 @@ def point_metrics(
     # 4. calculate F1 (documentation excerpt; keep synchronized)
     f1 = 2 * precision * recall / (precision + recall) if precision + recall else 0.0
     logger.info(f"Point metrics: precision={precision}, recall={recall}, f1={f1}")
+
     return PointMetrics(precision, recall, f1)

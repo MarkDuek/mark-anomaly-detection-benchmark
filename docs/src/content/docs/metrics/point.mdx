@@ -30,7 +30,7 @@ The evaluator applies the threshold once and shares the resulting vector with th
 predictions = tuple(int(score >= threshold) for score in scores)
 ```
 
-The label and score sequences must have equal length, labels must be binary, and scores must be finite; the evaluator checks these before thresholding. The selector is calibrated on validation data and derives the test threshold without test labels; the effective threshold stays fixed during each evaluation. Model selection uses the resulting `metrics.point` rather than recalculating point metrics.
+## Confusion Matrix Counts
 
 The implementation begins by counting true positives, false positives, and false negatives:
 
