@@ -247,6 +247,7 @@ body:has(.runs-page) :where(main) {
 .feature-selector label { align-items: center; display: flex; gap: 0.35rem; }
 .feature-selector label small { color: var(--text-muted); font-family: var(--sl-font-mono); font-size: 0.6875rem; margin-left: 0.2rem; }
 .feature-selector button { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-sm); color: var(--text-secondary); cursor: pointer; padding: 0.3rem 0.5rem; }
+.comparison-run-selector > div { grid-template-columns: 1fr; }
 .run-status { color: var(--text-muted); }
 .metric-summary { display: flex; flex-wrap: wrap; margin: 1rem 0 1.5rem; }
 .metric-summary > div { border-left: 1px solid var(--border); display: grid; gap: 0.2rem; margin-top: 0; min-width: 8rem; padding: 0 1rem; }

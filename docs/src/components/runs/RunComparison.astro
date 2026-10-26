@@ -1,29 +1,82 @@
 <section class="run-comparison" aria-labelledby="comparison-heading">
   <h2 id="comparison-heading">Compare runs</h2>
   <p>Select a dataset, then choose experiment runs to compare. Open any selected run for its detailed signal view.</p>
-  <label class="dataset-picker">Dataset <select id="dataset-selector"></select></label>
-  <div id="comparison-options" class="comparison-options"></div>
+  <div class="run-controls">
+    <label>Dataset <select id="dataset-selector"></select></label>
+    <details class="feature-selector comparison-run-selector"><summary id="run-selection">Runs</summary><div id="comparison-options"></div></details>
+  </div>
   <p id="comparison-status" class="run-status">Loading run data…</p>
+  <label class="dataset-picker">Metric family <select id="metric-family">
+    <option value="overview">Overview</option>
+    <option value="point">Point</option>
+    <option value="event">Event</option>
+    <option value="range">Range</option>
+    <option value="affiliation">Affiliation</option>
+    <option value="ranking">Ranking</option>
+    <option value="vus">VUS</option>
+    <option value="window">Window averages</option>
+  </select></label>
   <div class="comparison-scroll"><table id="comparison-table"></table></div>
+  <section id="parameter-comparison" hidden>
+    <h3>Selected parameters</h3>
+    <div class="comparison-scroll"><table id="parameter-table"></table></div>
+  </section>
+  <section aria-labelledby="comparison-curves-heading">
+    <h3 id="comparison-curves-heading">ROC and PR Curves</h3>
+    <p id="comparison-curve-status" role="status">Select models to compare their test curves.</p>
+    <div id="comparison-curves" class="run-curve-plots" hidden>
+      <div id="comparison-roc" role="img" aria-label="Test ROC curves for selected models"></div>
+      <div id="comparison-pr" role="img" aria-label="Test precision–recall curves for selected models"></div>
+    </div>
+  </section>
 </section>
 
 <script>
   const options = document.querySelector("#comparison-options");
   const datasetSelector = document.querySelector("#dataset-selector");
   const table = document.querySelector("#comparison-table");
+  const parameterSection = document.querySelector("#parameter-comparison");
+  const parameterTable = document.querySelector("#parameter-table");
   const status = document.querySelector("#comparison-status");
+  const metricFamily = document.querySelector("#metric-family");
+  const runSelection = document.querySelector("#run-selection");
+  const curveStatus = document.querySelector("#comparison-curve-status");
+  const curvePlots = document.querySelector("#comparison-curves");
+  const colors = ["#a21caf", "#4d7c0f", "#2563eb", "#ea580c", "#0891b2", "#be123c", "#7c3aed"];
   let runs = {};
   let sortColumn = null;
   let sortDirection = 1;
-  const entries = (run) => Object.entries(run.metric_groups.point || run.metrics);
+  let curveRequest;
+  const columns = {
+    overview: ["point.f1", "event.f1", "range.f1", "affiliation.f1", "ranking.auc_pr", "vus_ranking.auc_pr"],
+    point: ["point.precision", "point.recall", "point.f1"],
+    event: ["event.precision", "event.recall", "event.f1"],
+    range: ["range.precision", "range.recall", "range.f1"],
+    affiliation: ["affiliation.precision", "affiliation.recall", "affiliation.f1"],
+    ranking: ["ranking.auc_roc", "ranking.auc_pr"],
+    vus: ["vus_ranking.auc_roc", "vus_ranking.auc_pr"],
+    window: ["vus_prediction.precision", "vus_prediction.recall", "vus_prediction.f1"],
+  };
+  const selected = () => [...options.querySelectorAll("input:checked")].map((input) => input.value);
+  const updateRunSelection = () => { runSelection.textContent = `${selected().length} run${selected().length === 1 ? "" : "s"} selected`; };
+  const entries = (run) => Object.entries(run.metric_groups || { point: run.metrics }).flatMap(([group, metrics]) =>
+    Object.entries(metrics).map(([name, value]) => [`${group}.${name}`, value]),
+  );
   const value = (metric) => metric == null ? "N/A" : Number(metric).toFixed(4);
+  const parameterValue = (parameter) => typeof parameter === "object" ? JSON.stringify(parameter) : String(parameter);
   const formatDataset = (dataset) => dataset.replaceAll("-", " ").replace(/\b\w/g, (letter) => letter.toUpperCase());
-  const metricLabel = (name) => `Point<br>${name.replace("f1", "F1")}`;
+  const metricLabel = (name) => {
+    const [group, metric] = name.split(".");
+    const label = { ranking: "Ranking", vus_ranking: "VUS", vus_prediction: "Window avg." }[group] || group;
+    const metricName = { "ranking.auc_pr": "AP", "vus_ranking.auc_roc": "ROC", "vus_ranking.auc_pr": "PR" }[name] || metric.replace("f1", "F1").replaceAll("_", " ");
+    return `${label}<br>${metricName}`;
+  };
   const render = () => {
-    const ids = [...options.querySelectorAll("input:checked")].map((input) => input.value);
+    const ids = selected();
     table.replaceChildren();
-    if (!ids.length) { table.createCaption().textContent = "Select one or more runs to compare their metrics."; return; }
-    const metricNames = [...new Set(ids.flatMap((id) => entries(runs[id]).map(([name]) => name)))];
+    parameterTable.replaceChildren();
+    if (!ids.length) { table.createCaption().textContent = "Select one or more runs to compare their metrics."; parameterSection.hidden = true; return; }
+    const metricNames = columns[metricFamily.value];
     if (sortColumn === "run") ids.sort((left, right) => sortDirection * runs[left].display_name.localeCompare(runs[right].display_name));
     if (metricNames.includes(sortColumn)) ids.sort((left, right) => {
       const leftValue = Number(new Map(entries(runs[left])).get(sortColumn) ?? -Infinity);
@@ -35,13 +88,67 @@
     header.innerHTML = `<th><button type="button" data-sort="run">Run${sortIndicator("run")}</button></th>${metricNames.map((name) => `<th><button type="button" data-sort="${name}">${metricLabel(name)}${sortIndicator(name)}</button></th>`).join("")}`;
     table.append(header);
     const maximums = new Map(metricNames.map((name) => [name, Math.max(...ids.map((id) => Number(new Map(entries(runs[id])).get(name) ?? -Infinity)))]));
-    ids.forEach((id) => { const row = document.createElement("tr"); const metrics = new Map(entries(runs[id])); row.innerHTML = `<th><a href="${import.meta.env.BASE_URL}runs/explorer/?run=${encodeURIComponent(id)}">${runs[id].display_name}</a><small>${runs[id].run_time}<br>${id}</small></th>${metricNames.map((name) => { const metric = metrics.get(name); const formatted = value(metric); const isMaximum = metric != null && Number(metric) === maximums.get(name); return `<td>${isMaximum ? `<strong>${formatted}</strong>` : formatted}</td>`; }).join("")}`; table.append(row); });
+    ids.forEach((id) => { const row = document.createElement("tr"); const metrics = new Map(entries(runs[id])); row.innerHTML = `<th><a href="${import.meta.env.BASE_URL}runs/explorer/?run=${encodeURIComponent(id)}">${runs[id].display_name}</a><small>${runs[id].run_time}</small></th>${metricNames.map((name) => { const metric = metrics.get(name); const formatted = value(metric); const isMaximum = metric != null && Number(metric) === maximums.get(name); return `<td>${isMaximum ? `<strong>${formatted}</strong>` : formatted}</td>`; }).join("")}`; table.append(row); });
     table.querySelectorAll("[data-sort]").forEach((button) => button.addEventListener("click", () => { const column = button.dataset.sort; sortDirection = sortColumn === column ? -sortDirection : 1; sortColumn = column; render(); }));
+    const parameters = [...new Set(ids.flatMap((id) => Object.keys(runs[id].configuration.selected_parameters)))];
+    parameterSection.hidden = !parameters.length;
+    if (parameters.length) {
+      parameterTable.innerHTML = `<tr><th>Run</th>${parameters.map((parameter) => `<th>${parameter.replaceAll("_", " ")}</th>`).join("")}</tr>${ids.map((id) => `<tr><th>${runs[id].display_name}</th>${parameters.map((parameter) => `<td>${parameter in runs[id].configuration.selected_parameters ? parameterValue(runs[id].configuration.selected_parameters[parameter]) : "—"}</td>`).join("")}</tr>`).join("")}`;
+    }
   };
+  async function renderCurves() {
+    curveRequest?.abort();
+    const request = new AbortController();
+    curveRequest = request;
+    const ids = selected();
+    curvePlots.hidden = true;
+    if (!ids.length) { curveStatus.textContent = "Select models to compare their test curves."; return; }
+    curveStatus.textContent = "Loading test curves…";
+    try {
+      const curves = await Promise.all(ids.map(async (id) => {
+        const response = await fetch(`${import.meta.env.BASE_URL}${runs[id].curves_url}`, { signal: request.signal });
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        return (await response.json()).test;
+      }));
+      if (request.signal.aborted) return;
+      const Plotly = (await import("plotly.js-dist-min")).default;
+      let hasCurves = false;
+      curvePlots.hidden = false;
+      for (const [plotId, key, x, y, score, title, shape] of [
+        ["comparison-roc", "roc", "fpr", "tpr", "auc_roc", "ROC", "linear"],
+        ["comparison-pr", "pr", "recall", "precision", "auc_pr", "PR", "hv"],
+      ]) {
+        const traces = ids.flatMap((id, index) => {
+          const data = curves[index];
+          const points = data.curves[key];
+          if (!points) return [];
+          hasCurves = true;
+          const label = runs[id].display_name;
+          const coordinates = `${x.replaceAll("_", " ")}: %{x:.3f}<br>${y.replaceAll("_", " ")}: %{y:.3f}`;
+          return [{ x: points[x], y: points[y], type: points[x].length > 5000 ? "scattergl" : "scatter", mode: "lines", name: `${label} · ${score === "auc_pr" ? "AP" : "AUC"} ${value(data.ranking[score])}`, line: { color: colors[index % colors.length], shape }, hovertemplate: `${label}<br>${coordinates}<extra></extra>` }];
+        });
+        if (!traces.length) continue;
+        await Plotly.react(document.querySelector(`#${plotId}`), traces, {
+          title: { text: title },
+          xaxis: { title: { text: x.replaceAll("_", " ") }, range: [-0.02, 1.02], hoverformat: ".3f" },
+          yaxis: { title: { text: y.replaceAll("_", " ") }, range: [-0.02, 1.02] },
+          hovermode: "x unified",
+          hoverlabel: { bgcolor: "#ffffff", bordercolor: "#e5e7eb", font: { color: "#111827" } },
+          legend: { orientation: "v", x: 0, y: -0.32, yanchor: "top" }, margin: { t: 65, b: 165, l: 65, r: 20 },
+        }, { responsive: true, displaylogo: false });
+      }
+      if (request.signal.aborted) return;
+      curvePlots.hidden = !hasCurves;
+      curveStatus.textContent = hasCurves ? "" : "Test curves: N/A (single-class labels).";
+    } catch (error) {
+      if (!request.signal.aborted) curveStatus.textContent = "Could not load test curves for the selected models.";
+    }
+  }
   const renderOptions = () => {
     const datasetRuns = Object.entries(runs).filter(([, run]) => run.dataset_id === datasetSelector.value);
-    options.replaceChildren(...datasetRuns.map(([id, run], index) => { const label = document.createElement("label"); label.innerHTML = `<input type="checkbox" value="${id}" ${index < 2 ? "checked" : ""}> ${run.display_name}<small>${run.run_time}<br>${id}</small>`; label.querySelector("input").addEventListener("change", render); return label; }));
-    render();
+    options.replaceChildren(...datasetRuns.map(([id, run], index) => { const label = document.createElement("label"); label.innerHTML = `<input type="checkbox" value="${id}" ${index < 2 ? "checked" : ""}> ${run.display_name} — ${run.run_time}`; label.querySelector("input").addEventListener("change", () => { updateRunSelection(); render(); renderCurves(); }); return label; }));
+    updateRunSelection(); render(); renderCurves();
   };
+  metricFamily.addEventListener("change", render);
   fetch(`${import.meta.env.BASE_URL}runs.json`).then((response) => response.ok ? response.json() : Promise.reject()).then((data) => { runs = data; const datasets = [...new Set(Object.values(runs).map((run) => run.dataset_id))]; datasetSelector.replaceChildren(...datasets.map((dataset) => new Option(formatDataset(dataset), dataset))); datasetSelector.addEventListener("change", renderOptions); status.hidden = true; renderOptions(); }).catch(() => { status.textContent = "No generated run data is available. Run `make visualize` after creating test artifacts."; });
 </script>
