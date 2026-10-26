@@ -1,4 +1,3 @@
-import math
 from collections.abc import Sequence
 from dataclasses import dataclass
 
@@ -13,50 +12,19 @@ class PointMetrics:
 
 
 def point_metrics(
-    labels: Sequence[int],
-    scores: Sequence[float],
-    threshold: float,
-    logger: ComponentLogger,
+    labels: Sequence[int], predictions: Sequence[int], logger: ComponentLogger
 ) -> PointMetrics:
-    """Calculate point precision, recall, and F1 at a fixed score threshold."""
-    validate_inputs(labels, scores, logger)
-    metrics = calculate_point_metrics(labels, scores, threshold)
-    logger.info(
-        f"Point metrics at threshold {threshold}: "
-        f"precision={metrics.precision}, recall={metrics.recall}, f1={metrics.f1}"
-    )
-    return metrics
+    """Calculate point precision, recall, and F1 from binary predictions."""
 
-
-def validate_inputs(
-    labels: Sequence[int], scores: Sequence[float], logger: ComponentLogger
-) -> None:
-    if len(labels) != len(scores):
-        message = "Labels and scores must have equal lengths"
-        logger.error(message)
-        raise ValueError(message)
-    if any(label not in {0, 1} for label in labels):
-        message = "Point metrics require binary labels"
-        logger.error(message)
-        raise ValueError(message)
-    if any(not math.isfinite(score) for score in scores):
-        message = "Point metrics require finite scores"
-        logger.error(message)
-        raise ValueError(message)
-
-
-def calculate_point_metrics(
-    labels: Sequence[int], scores: Sequence[float], threshold: float
-) -> PointMetrics:
     # 1. count confusion-matrix values (documentation excerpt; keep synchronized)
     true_positives = sum(
-        label == 1 and score >= threshold for label, score in zip(labels, scores)
+        label == 1 and prediction == 1 for label, prediction in zip(labels, predictions)
     )
     false_positives = sum(
-        label == 0 and score >= threshold for label, score in zip(labels, scores)
+        label == 0 and prediction == 1 for label, prediction in zip(labels, predictions)
     )
     false_negatives = sum(
-        label == 1 and score < threshold for label, score in zip(labels, scores)
+        label == 1 and prediction == 0 for label, prediction in zip(labels, predictions)
     )
 
     # 2. calculate precision (documentation excerpt; keep synchronized)
@@ -75,4 +43,6 @@ def calculate_point_metrics(
 
     # 4. calculate F1 (documentation excerpt; keep synchronized)
     f1 = 2 * precision * recall / (precision + recall) if precision + recall else 0.0
-    return PointMetrics(precision, recall, f1)
+    logger.info(f"Point metrics: precision={precision}, recall={recall}, f1={f1}")
+
+    return PointMetrics(precision=precision, recall=recall, f1=f1)

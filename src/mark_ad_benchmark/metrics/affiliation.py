@@ -11,21 +11,23 @@ Interval = tuple[float, float]
 class AffiliationMetrics:
     precision: float
     recall: float
+    f1: float
 
 
 def affiliation_metrics(
     labels: Sequence[int], predictions: Sequence[int]
 ) -> AffiliationMetrics:
     """Calculate affiliation precision and recall from binary vectors."""
-    _validate_vectors(labels, predictions)
+    # 1. extract affiliation events and time range (documentation excerpt; keep synchronized)
     true_events = _events(labels)
     predicted_events = _events(predictions)
     if not true_events or not predicted_events:
-        return AffiliationMetrics(precision=0.0, recall=0.0)
+        return AffiliationMetrics(precision=0.0, recall=0.0, f1=0.0)
 
     time_range = (0.0, float(len(labels)))
     true_zones = _zones(true_events, time_range)
     precision_scores = []
+    # 7. average precision rewards across populated label zones (documentation excerpt; keep synchronized)
     for event, zone in zip(true_events, true_zones):
         predicted_parts = [
             part
@@ -40,30 +42,32 @@ def affiliation_metrics(
             )
             precision_scores.append(score)
 
-    prediction_zones = _zones(predicted_events, time_range)
     recall_scores = []
+    # 11. average recall rewards within each label zone (documentation excerpt; keep synchronized)
     for event, zone in zip(true_events, true_zones):
+        predicted_parts = [
+            part
+            for prediction in predicted_events
+            if (part := _intersection(prediction, zone)) is not None
+        ]
         score = 0.0
-        for prediction, prediction_zone in zip(predicted_events, prediction_zones):
+        for prediction, prediction_zone in zip(
+            predicted_parts, _zones(predicted_parts, zone)
+        ):
             part = _intersection(event, prediction_zone)
             if part is not None:
                 score += _recall_integral(prediction, part, zone)
         recall_scores.append(score / _length(event))
 
-    return AffiliationMetrics(
-        precision=sum(precision_scores) / len(precision_scores),
-        recall=sum(recall_scores) / len(recall_scores),
-    )
-
-
-def _validate_vectors(labels: Sequence[int], predictions: Sequence[int]) -> None:
-    if len(labels) != len(predictions):
-        raise ValueError("Labels and predictions must have equal lengths")
-    if any(value not in {0, 1} for value in (*labels, *predictions)):
-        raise ValueError("Affiliation metrics require binary vectors")
+    precision = sum(precision_scores) / len(precision_scores)
+    recall = sum(recall_scores) / len(recall_scores)
+    # 12. calculate affiliation F1 (documentation excerpt; keep synchronized)
+    f1 = 2 * precision * recall / (precision + recall) if precision + recall else 0.0
+    return AffiliationMetrics(precision, recall, f1)
 
 
 def _events(values: Sequence[int]) -> list[Interval]:
+    # 2. convert positive timestamps to half-open events (documentation excerpt; keep synchronized)
     events = []
     start: int | None = None
     for index, value in enumerate(values):
@@ -78,6 +82,7 @@ def _events(values: Sequence[int]) -> list[Interval]:
 
 
 def _zones(events: list[Interval], time_range: Interval) -> list[Interval]:
+    # 3. build nearest-event affiliation zones (documentation excerpt; keep synchronized)
     zones = []
     for index, event in enumerate(events):
         left = time_range[0] if index == 0 else (events[index - 1][1] + event[0]) / 2
@@ -91,6 +96,7 @@ def _zones(events: list[Interval], time_range: Interval) -> list[Interval]:
 
 
 def _intersection(first: Interval, second: Interval) -> Interval | None:
+    # 4. intersect half-open intervals (documentation excerpt; keep synchronized)
     start, end = max(first[0], second[0]), min(first[1], second[1])
     return (start, end) if start < end else None
 
@@ -101,6 +107,7 @@ def _length(interval: Interval) -> float:
 
 def _distance_integral(start: float, end: float, limit: float) -> float:
     """Integrate ``d + min(d, limit)`` for distances from start through end."""
+    # 5. integrate the capped precision-distance term (documentation excerpt; keep synchronized)
     linear = (end**2 - start**2) / 2
     capped = (min(end, limit) ** 2 - min(start, limit) ** 2) / 2
     capped += limit * (max(end - limit, 0.0) - max(start - limit, 0.0))
@@ -108,6 +115,7 @@ def _distance_integral(start: float, end: float, limit: float) -> float:
 
 
 def _precision_integral(prediction: Interval, event: Interval, zone: Interval) -> float:
+    # 6. integrate a predicted interval's precision reward (documentation excerpt; keep synchronized)
     overlap = _intersection(prediction, event)
     score = _length(overlap) if overlap is not None else 0.0
     zone_length = _length(zone)
@@ -136,6 +144,7 @@ def _precision_integral(prediction: Interval, event: Interval, zone: Interval) -
 def _recall_integral(
     prediction: Interval, event_part: Interval, zone: Interval
 ) -> float:
+    # 10. integrate a label interval's recall reward (documentation excerpt; keep synchronized)
     overlap = _intersection(prediction, event_part)
     score = _length(overlap) if overlap is not None else 0.0
     left = _intersection(event_part, (zone[0], prediction[0]))
@@ -149,6 +158,7 @@ def _recall_integral(
 def _recall_probability_integral(
     interval: Interval, prediction_edge: float, zone: Interval
 ) -> float:
+    # 9. integrate piecewise-linear recall probabilities (documentation excerpt; keep synchronized)
     breaks = sorted(
         {
             interval[0],
@@ -176,6 +186,7 @@ def _recall_probability_integral(
 
 
 def _recall_probability(point: float, prediction_edge: float, zone: Interval) -> float:
+    # 8. calculate the recall probability at one point (documentation excerpt; keep synchronized)
     distance = abs(point - prediction_edge)
     random_distance = min(point - zone[0], zone[1] - point)
     return 1 - (distance + min(distance, random_distance)) / _length(zone)

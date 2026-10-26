@@ -18,5 +18,7 @@ component_levels:
   mark_ad_benchmark.models.nystrom_kpca: info
   mark_ad_benchmark.models.convolutional_pca: info
   mark_ad_benchmark.metrics.point: info
+  mark_ad_benchmark.metrics.range: info
+  mark_ad_benchmark.metrics.intervals: info
   mark_ad_benchmark.protocols.base: info
   mark_ad_benchmark.protocols.inductive: info
