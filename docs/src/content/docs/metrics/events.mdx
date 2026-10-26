@@ -41,10 +41,10 @@ $$
 \hat{\mathcal A}=\{\hat A_1,\ldots,\hat A_M\}, \qquad \hat A_j=[\hat a_j,\hat b_j].
 $$
 
-Each interval includes both endpoints; indices start at zero. Adjacent positive timestamps form one event.
+The shared `extract_intervals()` method constructs $\mathcal A$ from `labels` and $\hat{\mathcal A}$ from `predictions`. It extracts maximal positive runs: each interval includes both endpoints, indices start at zero, and adjacent positive timestamps form one event.
 
 ```python
-# 1. extract maximal contiguous events (documentation excerpt; keep synchronized)
+# extract maximal contiguous positive intervals (documentation excerpt; keep synchronized)
 result = []
 start: int | None = None
 for index, value in enumerate(values):
@@ -56,6 +56,12 @@ for index, value in enumerate(values):
 if start is not None:
     result.append((start, len(values) - 1))
 return tuple(result)
+```
+
+```python
+# 1. extract label and predicted intervals (documentation excerpt; keep synchronized)
+label_intervals = extract_intervals(labels)
+predicted_intervals = extract_intervals(predictions)
 ```
 
 ## Overlap
@@ -88,11 +94,11 @@ $$
 # 3. average hits across predicted events (documentation excerpt; keep synchronized)
 return (
     sum(
-        any(_events_overlap(predicted, true) for true in true_events)
-        for predicted in predicted_events
+        any(_events_overlap(predicted, label) for label in label_intervals)
+        for predicted in predicted_intervals
     )
-    / len(predicted_events)
-    if predicted_events
+    / len(predicted_intervals)
+    if predicted_intervals
     else 0.0
 )
 ```
@@ -110,11 +116,11 @@ $$
 # 4. average hits across true events (documentation excerpt; keep synchronized)
 return (
     sum(
-        any(_events_overlap(true, predicted) for predicted in predicted_events)
-        for true in true_events
+        any(_events_overlap(label, predicted) for predicted in predicted_intervals)
+        for label in label_intervals
     )
-    / len(true_events)
-    if true_events
+    / len(label_intervals)
+    if label_intervals
     else 0.0
 )
 ```
@@ -127,16 +133,14 @@ $$
 F_{1,E}=\frac{2P_ER_E}{P_E+R_E}.
 $$
 
-Precision is `0.0` when there are no predicted events; recall is `0.0` when there are no true events. F1 is `0.0` when both components are zero.
+Precision is `0.0` when there are no predicted events; recall is `0.0` when there are no labeled events. F1 is `0.0` when both components are zero.
 
 ```python
-# 5. assemble study-defined event metrics (documentation excerpt; keep synchronized)
-true_events = extract_events(labels)
-predicted_events = extract_events(predictions)
-precision = event_precision(true_events, predicted_events)
-recall = event_recall(true_events, predicted_events)
+precision = event_precision(label_intervals, predicted_intervals)
+recall = event_recall(label_intervals, predicted_intervals)
 f1 = 2 * precision * recall / (precision + recall) if precision + recall else 0.0
-return EventMetrics(precision, recall, f1)
+
+return EventMetrics(precision=precision, recall=recall, f1=f1)
 ```
 
 ## Reference

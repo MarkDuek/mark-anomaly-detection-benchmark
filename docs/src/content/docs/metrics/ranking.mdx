@@ -3,6 +3,121 @@ title: Ranking Metrics
 description: Metrics for anomaly-score ranking quality.
 ---
 
+Ranking metrics assess whether anomalous timestamps receive higher scores than normal timestamps. They use the score ordering across thresholds; their AUC values do not depend on the selected operating threshold.
+
+## Parameters
+
+| Parameter | Type | Description |
+| --- | --- | --- |
+| `labels` | `Sequence[int]` | $y_t$: `0` for normal, `1` for anomaly. |
+| `scores` | `Sequence[float]` | $s_t$: anomaly score; larger values rank timestamps as more anomalous. |
+| `threshold` | `float` | $\tau$: selected score threshold for the separately reported operating point. |
+
+## Inputs
+
+For each timestamp $t$, ranking metrics receive a label and anomaly score:
+
+$$
+y_t\in\{0,1\},\qquad s_t\in\mathbb R.
+$$
+
+At a threshold $\tau$, the corresponding binary prediction is:
+
+$$
+\hat y_t(\tau)=\begin{cases}
+1,&s_t\ge\tau,\\
+0,&s_t<\tau.
+\end{cases}
+$$
+
+`ranking_metrics()` calculates AUC values from `labels` and `scores`. `ranking_curves()` additionally accepts `threshold` only to report one operating point; changing it does not change either AUC.
+
+## Undefined AUC Results
+
+Ranking AUCs require at least one normal and one anomalous label. When either class is absent, `ranking_metrics()` returns `None` for both AUCs. Serialized results use `null`.
+
+```python
+# 1. omit ranking metrics when a class is absent (documentation excerpt; keep synchronized)
+if len(set(labels)) != 2:
+    return RankingMetrics(auc_roc=None, auc_pr=None)
+```
+
+## ROC Rates and Curve
+
+At each threshold, the true-positive and false-positive rates are:
+
+$$
+\operatorname{TPR}(\tau)=\frac{TP(\tau)}{TP(\tau)+FN(\tau)},
+\qquad
+\operatorname{FPR}(\tau)=\frac{FP(\tau)}{FP(\tau)+TN(\tau)}.
+$$
+
+The receiver operating characteristic (ROC) curve contains these pairs as the threshold varies:
+
+$$
+\operatorname{ROC}(\tau)=\bigl(\operatorname{FPR}(\tau),\operatorname{TPR}(\tau)\bigr).
+$$
+
+## AUC-ROC
+
+ROC AUC is the area under the ROC curve:
+
+$$
+\operatorname{AUC}_{ROC}=\int_0^1\operatorname{TPR}(u)\,du,
+$$
+
+where $u$ is the false-positive rate. Equivalently, it is the probability that a randomly selected anomaly has a higher score than a randomly selected normal timestamp, with half credit for tied scores:
+
+$$
+\operatorname{AUC}_{ROC}=\Pr(S^+>S^-)+\frac12\Pr(S^+=S^-).
+$$
+
+```python
+# 2. calculate ROC AUC (documentation excerpt; keep synchronized)
+auc_roc=float(roc_auc_score(labels, scores)),
+```
+
+## Precision–Recall Curve
+
+Precision and recall at each threshold are:
+
+$$
+P(\tau)=\frac{TP(\tau)}{TP(\tau)+FP(\tau)},
+\qquad
+R(\tau)=\frac{TP(\tau)}{TP(\tau)+FN(\tau)}.
+$$
+
+The precision–recall (PR) curve contains:
+
+$$
+\operatorname{PR}(\tau)=\bigl(R(\tau),P(\tau)\bigr).
+$$
+
+`precision_recall_curve()` returns the coordinate arrays used by visualizations. Its final precision point is `1.0`, which has no corresponding threshold.
+
+## AUC-PR: Average Precision
+
+`auc_pr` is **average precision**, not trapezoidal area under the PR coordinates. It uses stepwise precision weighted by each increase in recall:
+
+$$
+\operatorname{AP}=\sum_n\bigl(R_n-R_{n-1}\bigr)P_n.
+$$
+
+```python
+# 3. calculate stepwise average precision (documentation excerpt; keep synchronized)
+auc_pr=float(average_precision_score(labels, scores)),
+```
+
+`ranking_curves()` accepts `threshold` to mark the selected operating point on the ROC and PR plots; it does not affect either AUC.
+
+## Library Implementation
+
+The implementation uses [scikit-learn metrics](https://scikit-learn.org/stable/api/sklearn.metrics.html):
+
+- [`roc_curve`](https://scikit-learn.org/stable/modules/generated/sklearn.metrics.roc_curve.html) and [`roc_auc_score`](https://scikit-learn.org/stable/modules/generated/sklearn.metrics.roc_auc_score.html) for ROC coordinates and ROC AUC.
+- [`precision_recall_curve`](https://scikit-learn.org/stable/modules/generated/sklearn.metrics.precision_recall_curve.html) for PR coordinates.
+- [`average_precision_score`](https://scikit-learn.org/stable/modules/generated/sklearn.metrics.average_precision_score.html) for stepwise average precision.
+
 ## Reference
 
 - Davis, Jesse, and Mark Goadrich. [*The Relationship Between Precision-Recall and ROC Curves*](https://dl.acm.org/doi/10.1145/1143844.1143874), ICML 2006.

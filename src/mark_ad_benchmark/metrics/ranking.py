@@ -17,10 +17,13 @@ class RankingMetrics:
 
 def ranking_metrics(labels: Sequence[int], scores: Sequence[float]) -> RankingMetrics:
     """Calculate ranking metrics, returning None when one class is absent."""
+    # 1. omit ranking metrics when a class is absent (documentation excerpt; keep synchronized)
     if len(set(labels)) != 2:
         return RankingMetrics(auc_roc=None, auc_pr=None)
     return RankingMetrics(
+        # 2. calculate ROC AUC (documentation excerpt; keep synchronized)
         auc_roc=float(roc_auc_score(labels, scores)),
+        # 3. calculate stepwise average precision (documentation excerpt; keep synchronized)
         auc_pr=float(average_precision_score(labels, scores)),
     )
 
@@ -36,6 +39,7 @@ def ranking_curves(
     precision, recall, _ = precision_recall_curve(labels, scores)
     positives = sum(labels)
     negatives = len(labels) - positives
+    # The applied threshold marks a point on curve plots; it does not affect AUC.
     true_positives = sum(
         label == 1 and score >= threshold
         for label, score in zip(labels, scores, strict=True)

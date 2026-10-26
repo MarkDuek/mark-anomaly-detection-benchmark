@@ -3,6 +3,325 @@ title: Affiliation Metrics
 description: Metrics for predicted and labeled event alignment.
 ---
 
+Affiliation metrics reward predictions near a labeled anomaly even when the events do not overlap. Precision measures how close predicted intervals are to labeled events; recall measures how close labeled events are to predictions.
+
+## Parameters
+
+| Parameter | Type | Description |
+| --- | --- | --- |
+| `labels` | `Sequence[int]` | $y_t$: `0` for normal, `1` for anomaly. |
+| `predictions` | `Sequence[int]` | $\hat y_t$: binary predictions at the applied threshold. |
+
+## Inputs
+
+For a finite anomaly score $s_t$ and selected threshold $\tau$, `evaluate_metrics()` produces one binary prediction per timestamp and shares it with the threshold-dependent metrics:
+
+$$
+\hat y_t=\begin{cases}1,&s_t\ge\tau,\\0,&s_t<\tau.\end{cases}
+$$
+
+```python
+predictions = tuple(int(score >= threshold) for score in scores)
+```
+
+## Events and Affiliation Zones
+
+The labeled and predicted events are:
+
+$$
+\mathcal A=\{A_1,\ldots,A_N\},\qquad
+\hat{\mathcal A}=\{\hat A_1,\ldots,\hat A_M\}.
+$$
+
+Each positive timestamp $t$ occupies a unit interval, so a run from indices $a$ through $b$ becomes:
+
+$$
+t\longmapsto[t,t+1),\qquad (a,\ldots,b)\longmapsto[a,b+1).
+$$
+
+Unlike the inclusive intervals used by event and range metrics, affiliation uses **half-open** intervals with continuous lengths. The time domain is:
+
+$$
+[0,T),\qquad T=\operatorname{len}(\texttt{labels}).
+$$
+
+```python
+# 1. extract affiliation events and time range (documentation excerpt; keep synchronized)
+true_events = _events(labels)
+predicted_events = _events(predictions)
+if not true_events or not predicted_events:
+    return AffiliationMetrics(precision=0.0, recall=0.0, f1=0.0)
+
+time_range = (0.0, float(len(labels)))
+```
+
+```python
+def _events(values: Sequence[int]) -> list[Interval]:
+    # 2. convert positive timestamps to half-open events (documentation excerpt; keep synchronized)
+    events = []
+    start: int | None = None
+    for index, value in enumerate(values):
+        if value and start is None:
+            start = index
+        elif not value and start is not None:
+            events.append((float(start), float(index)))
+            start = None
+    if start is not None:
+        events.append((float(start), float(len(values))))
+    return events
+```
+
+The distance from a point $t$ to an event $A$ is:
+
+$$
+d(t,A)=\min_{u\in A}|t-u|.
+$$
+
+Its affiliation zone $I_i$ consists of points nearer to $A_i$ than to another labeled event. Between two labeled events, the boundary lies halfway between the end of one event and the start of the next; the outer zones extend to the time-domain boundaries.
+
+```python
+def _zones(events: list[Interval], time_range: Interval) -> list[Interval]:
+    # 3. build nearest-event affiliation zones (documentation excerpt; keep synchronized)
+    zones = []
+    for index, event in enumerate(events):
+        left = time_range[0] if index == 0 else (events[index - 1][1] + event[0]) / 2
+        right = (
+            time_range[1]
+            if index == len(events) - 1
+            else (event[1] + events[index + 1][0]) / 2
+        )
+        zones.append((left, right))
+    return zones
+```
+
+Intervals are clipped to zones using a positive-length intersection. Their lengths are:
+
+$$
+|[a,b)|=b-a.
+$$
+
+```python
+def _intersection(first: Interval, second: Interval) -> Interval | None:
+    # 4. intersect half-open intervals (documentation excerpt; keep synchronized)
+    start, end = max(first[0], second[0]), min(first[1], second[1])
+    return (start, end) if start < end else None
+
+
+def _length(interval: Interval) -> float:
+    return interval[1] - interval[0]
+```
+
+## Distance Rewards
+
+Directed distance depends on which set supplies the points being measured:
+
+$$
+D(X,Y)=\frac1{|X|}\int_X d(t,Y)\,dt.
+$$
+
+For precision, the measured points are **predictions**; for recall, they are **labels**. To turn distances into scores, let $X_i$ be uniformly distributed within labeled zone $I_i$. The precision reward at distance $d$ is the probability that a random point is at least that far from $A_i$; the recall reward for a labeled point $t$ compares its distance with the distance from $t$ to a random point:
+
+$$
+\overline F_{P,i}(d)=\Pr\bigl(d(X_i,A_i)\ge d\bigr),
+\qquad
+\overline F_{R,i,t}(d)=\Pr\bigl(|t-X_i|\ge d\bigr).
+$$
+
+**Continuous-time choice:** The code integrates these rewards over the unit intervals assigned to positive timestamps, including fractional affiliation-zone boundaries. It does not sample a continuous signal or use a numerical integration library. A discrete formulation would instead sum rewards over timestamps and can produce different values.
+
+## Affiliation Precision
+
+Let $B_i$ contain predicted intervals clipped to zone $I_i$:
+
+$$
+B_i=\hat{\mathcal A}\cap I_i.
+$$
+
+Local precision averages the precision reward over the duration of those predictions; global precision averages only zones with nonzero predicted duration:
+
+$$
+P_{A,i}=\frac1{|B_i|}\int_{B_i}\overline F_{P,i}\bigl(d(t,A_i)\bigr)\,dt,
+\qquad
+P_A=\frac1{|\mathcal S|}\sum_{i\in\mathcal S}P_{A,i},
+\quad \mathcal S=\{i:|B_i|>0\}.
+$$
+
+Inside the labeled event, distance is zero and the reward is one. Outside it, `_precision_integral()` integrates the survival probability over each predicted part. `_distance_integral()` evaluates the capped distance term analytically, rather than approximating it with samples:
+
+```python
+def _distance_integral(start: float, end: float, limit: float) -> float:
+    """Integrate ``d + min(d, limit)`` for distances from start through end."""
+    # 5. integrate the capped precision-distance term (documentation excerpt; keep synchronized)
+    linear = (end**2 - start**2) / 2
+    capped = (min(end, limit) ** 2 - min(start, limit) ** 2) / 2
+    capped += limit * (max(end - limit, 0.0) - max(start - limit, 0.0))
+    return linear + capped
+```
+
+```python
+def _precision_integral(prediction: Interval, event: Interval, zone: Interval) -> float:
+    # 6. integrate a predicted interval's precision reward (documentation excerpt; keep synchronized)
+    overlap = _intersection(prediction, event)
+    score = _length(overlap) if overlap is not None else 0.0
+    zone_length = _length(zone)
+    limit = min(event[0] - zone[0], zone[1] - event[1])
+    left = _intersection(prediction, (zone[0], event[0]))
+    right = _intersection(prediction, (event[1], zone[1]))
+    for part, pivot in ((left, event[0]), (right, event[1])):
+        if part is not None:
+            distance_start = abs(part[0] - pivot)
+            distance_end = abs(part[1] - pivot)
+            score += (
+                _length(part)
+                - (
+                    _distance_integral(
+                        min(distance_start, distance_end),
+                        max(distance_start, distance_end),
+                        limit,
+                    )
+                    + _length(event) * _length(part)
+                )
+                / zone_length
+            )
+    return score
+```
+
+The implementation splits predictions at labeled-zone boundaries and divides each zone's integrated reward by its predicted duration:
+
+```python
+true_zones = _zones(true_events, time_range)
+precision_scores = []
+# 7. average precision rewards across populated label zones (documentation excerpt; keep synchronized)
+for event, zone in zip(true_events, true_zones):
+    predicted_parts = [
+        part
+        for prediction in predicted_events
+        if (part := _intersection(prediction, zone)) is not None
+    ]
+    predicted_length = sum(_length(part) for part in predicted_parts)
+    if predicted_length:
+        score = (
+            sum(_precision_integral(part, event, zone) for part in predicted_parts)
+            / predicted_length
+        )
+        precision_scores.append(score)
+```
+
+## Affiliation Recall
+
+Local recall measures each labeled point's distance to predictions in its labeled zone, relative to the random-point baseline. Global recall averages **all** $N$ labeled events:
+
+$$
+R_{A,i}=\frac1{|A_i|}\int_{A_i}
+\overline F_{R,i,t}\bigl(d(t,\hat{\mathcal A}\cap I_i)\bigr)\,dt,
+\qquad
+R_A=\frac1N\sum_{i=1}^N R_{A,i}.
+$$
+
+The implemented probability for a labeled point $t$ at distance $d$ from a prediction edge $e$ is:
+
+$$
+d=|t-e|,\qquad
+1-\frac{d+\min\bigl(d,\min(t-\inf I_i,\sup I_i-t)\bigr)}{|I_i|}.
+$$
+
+```python
+def _recall_probability(point: float, prediction_edge: float, zone: Interval) -> float:
+    # 8. calculate the recall probability at one point (documentation excerpt; keep synchronized)
+    distance = abs(point - prediction_edge)
+    random_distance = min(point - zone[0], zone[1] - point)
+    return 1 - (distance + min(distance, random_distance)) / _length(zone)
+```
+
+Between its breakpoints this probability is linear, so the trapezoids below integrate it exactly:
+
+```python
+def _recall_probability_integral(
+    interval: Interval, prediction_edge: float, zone: Interval
+) -> float:
+    # 9. integrate piecewise-linear recall probabilities (documentation excerpt; keep synchronized)
+    breaks = sorted(
+        {
+            interval[0],
+            interval[1],
+            (zone[0] + zone[1]) / 2,
+            (zone[0] + prediction_edge) / 2,
+            (prediction_edge + zone[1]) / 2,
+            prediction_edge,
+        }
+    )
+    score = 0.0
+    for start, end in pairwise(breaks):
+        start, end = max(start, interval[0]), min(end, interval[1])
+        if start >= end:
+            continue
+        score += (
+            (end - start)
+            * (
+                _recall_probability(start, prediction_edge, zone)
+                + _recall_probability(end, prediction_edge, zone)
+            )
+            / 2
+        )
+    return score
+```
+
+Overlaps contribute their full duration. Outside a prediction, `_recall_integral()` scores a labeled part only when the relevant prediction edge falls strictly inside the labeled zone:
+
+```python
+def _recall_integral(
+    prediction: Interval, event_part: Interval, zone: Interval
+) -> float:
+    # 10. integrate a label interval's recall reward (documentation excerpt; keep synchronized)
+    overlap = _intersection(prediction, event_part)
+    score = _length(overlap) if overlap is not None else 0.0
+    left = _intersection(event_part, (zone[0], prediction[0]))
+    right = _intersection(event_part, (prediction[1], zone[1]))
+    for part, pivot in ((left, prediction[0]), (right, prediction[1])):
+        if part is not None and zone[0] < pivot < zone[1]:
+            score += _recall_probability_integral(part, pivot, zone)
+    return score
+```
+
+The implementation first clips predictions to the labeled affiliation zone, then partitions the labeled event around the nearest of those predictions. When no prediction overlaps the zone, local recall is zero:
+
+```python
+recall_scores = []
+# 11. average recall rewards within each label zone (documentation excerpt; keep synchronized)
+for event, zone in zip(true_events, true_zones):
+    predicted_parts = [
+        part
+        for prediction in predicted_events
+        if (part := _intersection(prediction, zone)) is not None
+    ]
+    score = 0.0
+    for prediction, prediction_zone in zip(
+        predicted_parts, _zones(predicted_parts, zone)
+    ):
+        part = _intersection(event, prediction_zone)
+        if part is not None:
+            score += _recall_integral(prediction, part, zone)
+    recall_scores.append(score / _length(event))
+```
+
+## Affiliation F1
+
+F1 is the harmonic mean of affiliation precision and recall:
+
+$$
+F_{1,A}=\frac{2P_AR_A}{P_A+R_A}.
+$$
+
+If either event set is empty, the implementation returns zero for all three metrics. F1 is also zero when precision and recall sum to zero.
+
+```python
+precision = sum(precision_scores) / len(precision_scores)
+recall = sum(recall_scores) / len(recall_scores)
+# 12. calculate affiliation F1 (documentation excerpt; keep synchronized)
+f1 = 2 * precision * recall / (precision + recall) if precision + recall else 0.0
+return AffiliationMetrics(precision, recall, f1)
+```
+
 ## Reference
 
 - Huet, Alexis, Jose Manuel Navarro, and Dario Rossi. [*Local Evaluation of Time Series Anomaly Detection Algorithms*](https://doi.org/10.1145/3534678.3539339), KDD 2022.

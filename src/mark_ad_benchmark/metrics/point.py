@@ -45,4 +45,4 @@ def point_metrics(
     f1 = 2 * precision * recall / (precision + recall) if precision + recall else 0.0
     logger.info(f"Point metrics: precision={precision}, recall={recall}, f1={f1}")
 
-    return PointMetrics(precision, recall, f1)
+    return PointMetrics(precision=precision, recall=recall, f1=f1)

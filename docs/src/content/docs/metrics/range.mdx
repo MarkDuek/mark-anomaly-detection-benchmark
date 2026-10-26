@@ -1,0 +1,229 @@
+---
+title: Range Metrics
+description: Coverage-aware precision, recall, and F1 for anomaly ranges.
+---
+
+Range metrics measure **how much** of each anomaly range overlaps a prediction, rather than only whether the range was detected. The evaluator passes the same fixed binary predictions used by point and event metrics.
+
+## Parameters
+
+| Parameter | Type | Description |
+| --- | --- | --- |
+| `labels` | `Sequence[int]` | $y_t$: `0` for normal, `1` for anomaly. |
+| `predictions` | `Sequence[int]` | $\hat y_t$: binary predictions at the applied threshold. |
+| `recall_existence_weight` | `float` | $\alpha\in[0,1]$: weight of the existence reward in range recall. |
+| `logger` | `ComponentLogger` | Records the resulting range F1. |
+
+## Inputs
+
+For each timestamp $t$, the benchmark requires a binary label $y_t \in \{0, 1\}$ and a finite anomaly score $s_t$. Given the selected threshold $\tau$, `evaluate_metrics()` predicts an anomaly when:
+
+$$
+\hat{y}_t = \begin{cases}
+1 & \text{if } s_t \geq \tau \\
+0 & \text{otherwise}
+\end{cases}
+$$
+
+The evaluator applies the threshold once and shares the resulting vector with threshold-dependent metric families:
+
+```python
+predictions = tuple(int(score >= threshold) for score in scores)
+```
+
+## Ranges
+
+The ground-truth ranges are:
+
+$$
+\mathcal R=\{R_1,\ldots,R_N\}.
+$$
+
+The predicted ranges are:
+
+$$
+\mathcal P=\{P_1,\ldots,P_M\}.
+$$
+
+The shared `extract_intervals()` method constructs them from `labels` and `predictions`: maximal positive runs with zero-based, inclusive endpoints. It is the same extraction used by event metrics, but here the intervals are scored for coverage and fragmentation.
+
+```python
+# extract maximal contiguous positive intervals (documentation excerpt; keep synchronized)
+result = []
+start: int | None = None
+for index, value in enumerate(values):
+    if value and start is None:
+        start = index
+    elif not value and start is not None:
+        result.append((start, index - 1))
+        start = None
+if start is not None:
+    result.append((start, len(values) - 1))
+return tuple(result)
+```
+
+`range_metrics()` extracts both sets once, then passes the intervals to range recall and precision:
+
+```python
+# 1. extract label and predicted intervals (documentation excerpt; keep synchronized)
+label_intervals = extract_intervals(labels)
+predicted_intervals = extract_intervals(predictions)
+```
+
+## Reward Functions
+
+### Existence Reward
+
+For a label range $R_i$, existence rewards **any** overlap with a predicted range:
+
+$$
+E_i=\begin{cases}
+1,&\exists P_j:R_i\cap P_j\ne\varnothing,\\
+0,&\text{otherwise}.
+\end{cases}
+$$
+
+The overlap calculation first identifies the intersecting intervals:
+
+```python
+# 2. score existence, coverage, and cardinality (documentation excerpt; keep synchronized)
+start, end = interval
+overlaps = [
+    compared
+    for compared in comparison_intervals
+    if compared[0] <= end and start <= compared[1]
+]
+existence = float(bool(overlaps))
+```
+
+### Overlap Reward and Cardinality
+
+Overlap rewards how much of a range is covered, where within the range coverage occurs, and whether detections are fragmented. For a range $R_i$ with $L_i$ timestamps, let $r_{ik}$ be its $k$-th timestamp. The weighted overlap with $P_j$ is:
+
+$$
+\omega(R_i,R_i\cap P_j,\delta)=
+\frac{\sum_{k=1}^{L_i}\delta(k,L_i)\,\mathbf1(r_{ik}\in P_j)}
+{\sum_{k=1}^{L_i}\delta(k,L_i)}.
+$$
+
+Positional weights $\delta(k,L)$ assign importance to the $k$-th timestamp within a range of length $L$:
+
+| Positional weighting | $\delta(k,L)$ |
+| --- | --- |
+| Flat | $1$ |
+| Front-end | $L-k+1$ |
+| Back-end | $k$ |
+| Middle | $\min(k,L-k+1)$ |
+
+We use **flat weighting** ($\delta=1$), so each timestamp contributes equally and weighted overlap becomes the fraction of timestamps in the intersection:
+
+$$
+\omega(R_i,R_i\cap P_j,1)=\frac{|R_i\cap P_j|}{|R_i|}.
+$$
+
+Let $c_i$ count predicted ranges overlapping $R_i$. The reciprocal cardinality factor penalizes fragmented predictions:
+
+$$
+C_i=\begin{cases}
+1/c_i,&c_i>0,\\
+0,&c_i=0.
+\end{cases}
+$$
+
+The overlap reward applies the cardinality factor to the sum of overlaps:
+
+$$
+O_i=C_i\sum_{j=1}^M\omega(R_i,R_i\cap P_j,1).
+$$
+
+With disjoint predicted ranges, the sum of intersection lengths equals the number of covered timestamps. The label-range reward combines existence and overlap using $\alpha\in[0,1]$:
+
+$$
+R(R_i,\mathcal P)=\alpha E_i+(1-\alpha)O_i.
+$$
+
+The shared reward calculation uses inclusive interval endpoints to count covered timestamps:
+
+```python
+covered = sum(
+    min(end, compared[1]) - max(start, compared[0]) + 1 for compared in overlaps
+) / (end - start + 1)
+cardinality = 1 / len(overlaps) if overlaps else 0.0
+return existence_weight * existence + (1 - existence_weight) * covered * cardinality
+```
+
+### Predicted-Range Reward
+
+For a predicted range $P_j$, the reward uses overlap and cardinality **without** an existence term. Let $c_j'$ count label ranges overlapping $P_j$, and let $C_j'=1/c_j'$ when $c_j'>0$ (otherwise $0$):
+
+$$
+P(P_j,\mathcal R)=C_j'\sum_{i=1}^N\frac{|P_j\cap R_i|}{|P_j|}.
+$$
+
+The reciprocal factor penalizes a predicted range overlapping multiple label ranges. The same `_range_reward()` code above computes this reward with `existence_weight` set to `0.0`.
+
+## Range Recall
+
+Recall averages the reward across all $N$ label ranges:
+
+$$
+R_R=\frac1N\sum_{i=1}^N R(R_i,\mathcal P).
+$$
+
+`recall_existence_weight` supplies $\alpha$. When there are no label ranges, recall is `0.0`.
+
+```python
+# 3. average rewards over label intervals (documentation excerpt; keep synchronized)
+return (
+    sum(
+        _range_reward(label, predicted_intervals, existence_weight)
+        for label in label_intervals
+    )
+    / len(label_intervals)
+    if label_intervals
+    else 0.0
+)
+```
+
+## Range Precision
+
+Precision averages the predicted-range rewards:
+
+$$
+P_R=\frac1M\sum_{j=1}^M P(P_j,\mathcal R).
+$$
+
+Precision is `0.0` when there are no predicted ranges.
+
+```python
+# 4. average rewards over predicted intervals (documentation excerpt; keep synchronized)
+return (
+    sum(
+        _range_reward(predicted, label_intervals, 0.0)
+        for predicted in predicted_intervals
+    )
+    / len(predicted_intervals)
+    if predicted_intervals
+    else 0.0
+)
+```
+
+## Range F1
+
+Range F1 is the harmonic mean of range precision and recall:
+
+$$
+F_{1,R}=\frac{2P_RR_R}{P_R+R_R}.
+$$
+
+Only F1 is reported; precision and recall are calculated internally. F1 is `0.0` when both components are zero.
+
+```python
+recall = range_recall(label_intervals, predicted_intervals, recall_existence_weight)
+precision = range_precision(label_intervals, predicted_intervals)
+f1 = 2 * precision * recall / (precision + recall) if precision + recall else 0.0
+```
+
+## Reference
+
+- Tatbul, Nesime, Tae Jun Lee, Stan Zdonik, Mejbah Alam, and Justin Gottschlich. [*Precision and Recall for Time Series*](https://proceedings.neurips.cc/paper/2018/hash/8f468c873a32bb0619eaeb2050ba45d1-Abstract.html), NeurIPS 2018.

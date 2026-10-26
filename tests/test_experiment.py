@@ -103,9 +103,19 @@ def test_inductive_training_and_testing_use_separate_artifacts(
         (validated.run_dir / "ranking_curves.json").read_text()
     )
     assert validation_curves["operating_point"]["precision"] == pytest.approx(1.0)
-    assert json.loads((validated.run_dir / "metrics.json").read_text())["validation"][
-        "ranking"
-    ]["auc_roc"] == pytest.approx(1.0)
+    validation_metrics = json.loads((validated.run_dir / "metrics.json").read_text())[
+        "validation"
+    ]
+    assert set(validation_metrics) == {
+        "point",
+        "event",
+        "range",
+        "affiliation",
+        "ranking",
+        "vus_ranking",
+        "vus_prediction",
+    }
+    assert validation_metrics["ranking"]["auc_roc"] == pytest.approx(1.0)
     assert (
         json.loads((validated.run_dir / "validation_history.json").read_text())[0][
             "epoch"
@@ -131,9 +141,9 @@ def test_inductive_training_and_testing_use_separate_artifacts(
     assert test_curves["operating_point"]["recall"] == pytest.approx(1.0)
     assert (testing.run_dir / "metrics.json").is_file()
     assert (testing.run_dir / "manifest.json").is_file()
-    assert json.loads((testing.run_dir / "metrics.json").read_text())["test"][
-        "event"
-    ] == {
+    test_metrics = json.loads((testing.run_dir / "metrics.json").read_text())["test"]
+    assert set(test_metrics) == set(validation_metrics)
+    assert test_metrics["event"] == {
         "precision": 1.0,
         "recall": 1.0,
         "f1": 1.0,

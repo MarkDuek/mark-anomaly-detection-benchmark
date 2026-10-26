@@ -5,7 +5,7 @@ from dataclasses import dataclass
 import numpy as np
 from vus.analysis.robustness_eval import generate_curve
 
-from mark_ad_benchmark.metrics.events import ranges
+from mark_ad_benchmark.metrics.intervals import extract_intervals
 
 
 @dataclass(frozen=True)
@@ -25,8 +25,10 @@ def vus_ranking_metrics(
     labels: Sequence[int], scores: Sequence[float], max_window: int, samples: int
 ) -> VusRankingMetrics:
     """Calculate canonical VUS-ROC and VUS-PR metrics."""
+    # 4. omit score-based VUS when a class is absent (documentation excerpt; keep synchronized)
     if not any(labels) or all(labels):
         return VusRankingMetrics(auc_roc=None, auc_pr=None)
+    # 5. calculate score-based VUS with the pinned library (documentation excerpt; keep synchronized)
     *_, auc_roc, auc_pr = generate_curve(
         np.asarray(labels),
         np.asarray(scores),
@@ -44,12 +46,14 @@ def vus_prediction_metrics(
     progress: Callable[[], None] | None = None,
 ) -> VusPredictionMetrics:
     """Average TSB-AD range precision, recall, and F1 over extension windows."""
+    # 6. return zero fixed-prediction VUS metrics when either set is empty (documentation excerpt; keep synchronized)
     if not any(labels) or not any(predictions):
         if progress is not None:
             for _ in range(max_window + 1):
                 progress()
         return VusPredictionMetrics(precision=0.0, recall=0.0, f1=0.0)
     values = []
+    # 7. average fixed-prediction metrics across extension windows (documentation excerpt; keep synchronized)
     for window in range(max_window + 1):
         values.append(
             range_counts(labels, predictions, window, include_existence=False)
@@ -69,6 +73,7 @@ def range_counts(
     include_existence: bool,
 ) -> tuple[float, float, float, float]:
     """Return soft range precision, recall, F1, and false-positive rate."""
+    # 3. calculate soft range counts and rates for one window (documentation excerpt; keep synchronized)
     extended = extend_labels(labels, window)
     prediction = np.asarray(predictions, dtype=float)
     positives = sum(labels)
@@ -98,10 +103,11 @@ def range_counts(
 
 def extend_labels(labels: Sequence[int], window: int) -> np.ndarray:
     """Apply the TSB-AD square-root range extension for one window size."""
+    # 1. extend label ranges with square-root weights (documentation excerpt; keep synchronized)
     extended = np.asarray(labels, dtype=np.float32)
     if window == 0:
         return extended
-    for start, end in ranges(labels):
+    for start, end in extract_intervals(labels):
         for index in range(max(start - window // 2, 0), start):
             extended[index] += math.sqrt(1 - (start - index) / window)
         for index in range(end + 1, min(end + window // 2 + 1, len(labels))):
@@ -111,8 +117,9 @@ def extend_labels(labels: Sequence[int], window: int) -> np.ndarray:
 
 def influence_ranges(labels: Sequence[int], window: int) -> tuple[tuple[int, int], ...]:
     """Return merged range-extension zones used for TSB-AD existence rewards."""
+    # 2. construct merged influence ranges (documentation excerpt; keep synchronized)
     zones = []
-    for start, end in ranges(labels):
+    for start, end in extract_intervals(labels):
         start = max(start - window // 2, 0)
         end = min(end + window // 2, len(labels) - 1)
         if zones and zones[-1][1] >= start:

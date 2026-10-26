@@ -1,8 +1,243 @@
 ---
 title: VUS Metrics
-description: Range-aware volume-under-surface measures.
+description: Range-aware AUC and volume-under-surface metrics.
 ---
 
-## Reference
+VUS evaluates range-aware ROC and PR behavior over multiple temporal tolerance widths. This benchmark reports score-based VUS-ROC and VUS-PR, plus separate fixed-prediction averages of precision, recall, and F1.
+
+## Parameters
+
+### Score-Based VUS
+
+| Parameter | Type | Description |
+| --- | --- | --- |
+| `labels` | `Sequence[int]` | $y_t$: `0` for normal, `1` for anomaly. |
+| `scores` | `Sequence[float]` | $s_t$: anomaly scores used across sampled thresholds. |
+| `max_window` | `int` | $\ell_{\max}$: largest range-extension width. |
+| `samples` | `int` | $K$: number of score-ranked thresholds sampled by the VUS library. |
+
+### Fixed-Prediction Window Averages
+
+| Parameter | Type | Description |
+| --- | --- | --- |
+| `labels` | `Sequence[int]` | $y_t$: `0` for normal, `1` for anomaly. |
+| `predictions` | `Sequence[int]` | $\hat y_t$: binary predictions at the selected threshold. |
+| `max_window` | `int` | $\ell_{\max}$: largest range-extension width. |
+| `progress` | `Callable[[], None] \| None` | Advances once per evaluated window when provided. |
+
+## Paper Range-AUC Formulation
+
+### Extended Labels
+
+For a label range with inclusive endpoints $[a,b]$ and extension width $\ell$, the implementation gives timestamps in the surrounding buffer a square-root weight. The original range remains weight $1$:
+
+$$
+\tilde y_t^{(\ell)}=\begin{cases}
+\sqrt{1-\dfrac{a-t}{\ell}},&\max(0,a-\lfloor\ell/2\rfloor)\le t<a,\\
+1,&a\le t\le b,\\
+\sqrt{1-\dfrac{t-b}{\ell}},&b<t\le\min(T-1,b+\lfloor\ell/2\rfloor),\\
+0,&\text{otherwise}.
+\end{cases}
+$$
+
+Extensions are clipped to the time-series boundaries and overlapping weights are capped at $1$:
+
+```python
+# 1. extend label ranges with square-root weights (documentation excerpt; keep synchronized)
+extended = np.asarray(labels, dtype=np.float32)
+if window == 0:
+    return extended
+for start, end in extract_intervals(labels):
+    for index in range(max(start - window // 2, 0), start):
+        extended[index] += math.sqrt(1 - (start - index) / window)
+    for index in range(end + 1, min(end + window // 2 + 1, len(labels))):
+        extended[index] += math.sqrt(1 - (index - end) / window)
+return np.minimum(extended, 1.0)
+```
+
+The existence reward uses merged influence ranges around label intervals:
+
+```python
+# 2. construct merged influence ranges (documentation excerpt; keep synchronized)
+zones = []
+for start, end in extract_intervals(labels):
+    start = max(start - window // 2, 0)
+    end = min(end + window // 2, len(labels) - 1)
+    if zones and zones[-1][1] >= start:
+        zones[-1] = (zones[-1][0], end)
+    else:
+        zones.append((start, end))
+return tuple(zones)
+```
+
+### Weighted Counts and Rates
+
+At threshold $\tau$, let $\hat y_t(\tau)$ be the binary score decision. Range-aware counts use the extended labels:
+
+$$
+TP_\ell(\tau)=\sum_{t=1}^T\tilde y_t^{(\ell)}\hat y_t(\tau),
+\qquad
+FP_\ell(\tau)=\sum_{t=1}^T\bigl(1-\tilde y_t^{(\ell)}\bigr)\hat y_t(\tau).
+$$
+
+The paper defines the adjusted positive total and its complement as:
+
+$$
+N_{+,\ell}=\frac12\sum_{t=1}^T\bigl(y_t+\tilde y_t^{(\ell)}\bigr),
+\qquad N_{-,\ell}=T-N_{+,\ell}.
+$$
+
+For $N$ label ranges, existence is the fraction whose influence range contains a prediction:
+
+$$
+E_\ell(\tau)=\frac1N\sum_{i=1}^N
+\mathbf1\bigl(\exists t\in I_i^{(\ell)}:\hat y_t(\tau)=1\bigr).
+$$
+
+The range-aware rates are:
+
+$$
+R_\ell(\tau)=\min\!\left(\frac{TP_\ell(\tau)}{N_{+,\ell}},1\right)E_\ell(\tau),
+\qquad
+P_\ell(\tau)=\frac{TP_\ell(\tau)}{\sum_t\hat y_t(\tau)},
+\qquad
+FPR_\ell(\tau)=\frac{FP_\ell(\tau)}{N_{-,\ell}}.
+$$
+
+This is the paper's label-only normalization. The local fixed-prediction helper below uses a related, prediction-dependent normalization, so it does not directly implement this equation. `include_existence` controls whether it applies $E_\ell$ to recall:
+
+```python
+# 3. calculate soft range counts and rates for one window (documentation excerpt; keep synchronized)
+extended = extend_labels(labels, window)
+prediction = np.asarray(predictions, dtype=float)
+positives = sum(labels)
+product = extended * prediction
+true_positive = float(product.sum())
+predicted = float(prediction.sum())
+range_list = influence_ranges(labels, window)
+hit_ratio = (
+    sum(any(predictions[start : end + 1]) for start, end in range_list)
+    / len(range_list)
+    if range_list
+    else 0.0
+)
+new_labels = product.copy()
+new_labels[extended == 1] = 1
+adjusted_positive = (positives + float(new_labels.sum())) / 2
+recall = min(true_positive / adjusted_positive, 1.0) if adjusted_positive else 0.0
+if include_existence:
+    recall *= hit_ratio
+precision = true_positive / predicted if predicted else 0.0
+f1 = 2 * precision * recall / (precision + recall) if precision + recall else 0.0
+false_positive = predicted - true_positive
+negatives = len(labels) - adjusted_positive
+fpr = false_positive / negatives if negatives else 0.0
+```
+
+### Range ROC, PR, and AUC
+
+At a fixed extension width $\ell$, varying $\tau$ forms the range-aware curves:
+
+$$
+ROC_\ell(\tau)=\bigl(FPR_\ell(\tau),R_\ell(\tau)\bigr),
+\qquad
+PR_\ell(\tau)=\bigl(R_\ell(\tau),P_\ell(\tau)\bigr).
+$$
+
+Their areas are the intermediate range AUC values:
+
+$$
+R\text{-}AUC\text{-}ROC(\ell)=\int_0^1R_\ell(u)\,du,
+\qquad
+R\text{-}AUC\text{-}PR(\ell)=\int_0^1P_\ell(r)\,dr.
+$$
+
+They are calculated within the score-based VUS library and are not reported separately.
+
+## Score-Based VUS Implementation
+
+### ROC and PR Surfaces
+
+VUS evaluates every extension width from $0$ through $\ell_{\max}$ and score thresholds within each width. This produces range-aware ROC and PR surfaces:
+
+$$
+ROC_S(\tau,\ell)=\bigl(FPR_\ell(\tau),R_\ell(\tau),\ell\bigr),
+\qquad
+PR_S(\tau,\ell)=\bigl(R_\ell(\tau),P_\ell(\tau),\ell\bigr).
+$$
+
+### VUS-ROC and VUS-PR
+
+Conceptually, VUS averages range AUC over normalized extension widths:
+
+$$
+VUS\text{-}ROC=\frac1{\ell_{\max}}
+\int_0^{\ell_{\max}}R\text{-}AUC\text{-}ROC(\ell)\,d\ell,
+$$
+
+$$
+VUS\text{-}PR=\frac1{\ell_{\max}}
+\int_0^{\ell_{\max}}R\text{-}AUC\text{-}PR(\ell)\,d\ell.
+$$
+
+Score-based VUS calls the original authors' pinned [`vus==0.0.6`](https://pypi.org/project/vus/0.0.6/) library, specifically [`RangeAUC_volume_opt()`](https://github.com/thedatumorg/VUS/blob/main/vus/utils/metrics.py#L382-L468) through `generate_curve(..., version="opt")`. It evaluates discrete widths $0,\ldots,\ell_{\max}$ and sampled score thresholds, then returns the mean range ROC AUC and range PR AUC over those widths. A series with only one label class returns `None` for both scores:
+
+```python
+# 4. omit score-based VUS when a class is absent (documentation excerpt; keep synchronized)
+if not any(labels) or all(labels):
+    return VusRankingMetrics(auc_roc=None, auc_pr=None)
+
+# 5. calculate score-based VUS with the pinned library (documentation excerpt; keep synchronized)
+*_, auc_roc, auc_pr = generate_curve(
+    np.asarray(labels),
+    np.asarray(scores),
+    slidingWindow=max_window,
+    version="opt",
+    thre=samples,
+)
+return VusRankingMetrics(float(auc_roc), float(auc_pr))
+```
+
+The optimized library variant differs from the paper's range-AUC equations above. At each threshold, it masks buffer weights not selected by the prediction before calculating its adjusted positive total; therefore that total changes with the threshold. Its ROC area is trapezoidal, while its PR area is stepwise: each recall increment is multiplied by the precision at its endpoint. The benchmark reports this released implementation for reproducible VUS results.
+
+## Fixed-Prediction Window Averages
+
+`vus_prediction_metrics()` uses one fixed binary prediction vector. It applies the local soft range calculation at each width $w\in\{0,\ldots,\ell_{\max}\}$ with `include_existence=False`, then averages each result independently:
+
+$$
+\bar P=\frac1{\ell_{\max}+1}\sum_{w=0}^{\ell_{\max}}P_w,
+\qquad
+\bar R=\frac1{\ell_{\max}+1}\sum_{w=0}^{\ell_{\max}}R_w,
+\qquad
+\bar F_1=\frac1{\ell_{\max}+1}\sum_{w=0}^{\ell_{\max}}F_{1,w}.
+$$
+
+In particular, $\bar F_1$ is an average of per-window F1 values, not the harmonic mean of $\bar P$ and $\bar R$.
+
+```python
+# 6. return zero fixed-prediction VUS metrics when either set is empty (documentation excerpt; keep synchronized)
+if not any(labels) or not any(predictions):
+    if progress is not None:
+        for _ in range(max_window + 1):
+            progress()
+    return VusPredictionMetrics(precision=0.0, recall=0.0, f1=0.0)
+
+values = []
+# 7. average fixed-prediction metrics across extension windows (documentation excerpt; keep synchronized)
+for window in range(max_window + 1):
+    values.append(
+        range_counts(labels, predictions, window, include_existence=False)
+    )
+    if progress is not None:
+        progress()
+precision = sum(value[0] for value in values) / len(values)
+recall = sum(value[1] for value in values) / len(values)
+f1 = sum(value[2] for value in values) / len(values)
+return VusPredictionMetrics(precision, recall, f1)
+```
+
+## References
 
 - Paparrizos, John, Paul Boniol, Themis Palpanas, Ruey S. Tsay, Aaron Elmore, and Michael J. Franklin. [*Volume Under the Surface: A New Accuracy Evaluation Measure for Time-Series Anomaly Detection*](https://www.vldb.org/pvldb/vol15/p2774-paparrizos.pdf), Proceedings of the VLDB Endowment, 2022.
+- [`vus` package, version 0.0.6](https://pypi.org/project/vus/0.0.6/).
+- [Original VUS implementation](https://github.com/thedatumorg/VUS).

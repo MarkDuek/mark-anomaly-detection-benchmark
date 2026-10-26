@@ -15,7 +15,8 @@ Some metric families use the scores directly and therefore do not depend on that
 | --- | --- | --- |
 | [Point](/metrics/point/) | Labels, scores, threshold | Precision, recall, F1 |
 | [Ranking](/metrics/ranking/) | Labels, scores | AUC-ROC, AUC-PR |
-| [Events](/metrics/events/) | Labels, predictions | Point-adjusted F1, event F1, range F1 |
+| [Events](/metrics/events/) | Labels, predictions | Event precision, recall, F1 |
+| [Range](/metrics/range/) | Labels, predictions | Range F1 |
 | [Affiliation](/metrics/affiliation/) | Labels, predictions | Affiliation precision, recall, F1 |
 | [VUS](/metrics/vus/) | Labels, scores or predictions | VUS-ROC, VUS-PR, VUS precision, recall, F1 |
 
@@ -31,7 +32,8 @@ Ranking AUC values are unavailable when labels contain only one class. The evalu
 
 <div class="documentation-map">
   <a href="/metrics/point/"><strong>Point</strong><span>Classify each timestamp independently.</span></a>
-  <a href="/metrics/events/"><strong>Events</strong><span>Assess detection over contiguous anomaly ranges.</span></a>
+  <a href="/metrics/events/"><strong>Events</strong><span>Assess whether true anomaly events were detected.</span></a>
+  <a href="/metrics/range/"><strong>Range</strong><span>Measure coverage and fragmentation of anomaly ranges.</span></a>
   <a href="/metrics/ranking/"><strong>Ranking</strong><span>Measure how well scores prioritize anomalies.</span></a>
   <a href="/metrics/affiliation/"><strong>Affiliation</strong><span>Compare predicted and labeled event alignment.</span></a>
   <a href="/metrics/vus/"><strong>VUS</strong><span>Use range-aware volume-under-surface measures.</span></a>

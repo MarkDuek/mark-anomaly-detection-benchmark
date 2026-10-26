@@ -78,7 +78,7 @@ def test_evaluation_uses_the_supplied_frozen_threshold() -> None:
         "vus_prediction",
     }
     assert set(asdict(metrics.event)) == {"precision", "recall", "f1"}
-    assert set(asdict(metrics.range)) == {"f1"}
+    assert set(asdict(metrics.range)) == {"precision", "recall", "f1"}
     assert set(asdict(metrics.point)) == {"precision", "recall", "f1"}
     assert set(asdict(metrics.affiliation)) == {"precision", "recall", "f1"}
 

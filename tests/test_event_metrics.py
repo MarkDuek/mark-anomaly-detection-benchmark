@@ -1,9 +1,7 @@
 import pytest
 
-from mark_ad_benchmark.metrics.events import (
-    event_metrics,
-    extract_events,
-)
+from mark_ad_benchmark.metrics.events import event_metrics
+from mark_ad_benchmark.metrics.intervals import extract_intervals
 
 
 def test_event_metrics_use_frozen_predictions() -> None:
@@ -28,8 +26,8 @@ def test_event_precision_counts_predicted_events_not_predicted_points() -> None:
     )
 
 
-def test_extract_events_closes_a_trailing_event_at_the_final_index() -> None:
-    assert extract_events((0, 0, 1, 1)) == ((2, 3),)
+def test_extract_intervals_closes_a_trailing_event_at_the_final_index() -> None:
+    assert extract_intervals((0, 0, 1, 1)) == ((2, 3),)
 
 
 @pytest.mark.parametrize(
