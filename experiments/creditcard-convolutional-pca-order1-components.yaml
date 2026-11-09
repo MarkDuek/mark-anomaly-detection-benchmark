@@ -1,0 +1,27 @@
+id: creditcard-convolutional-pca-order1-components
+dataset: creditcard
+model:
+  name: convolutional_pca
+  parameters:
+    n_components: 25
+    filter_order: 1
+    standardize_features: true
+    step_size: 0.2
+    max_iterations: 5000
+  candidates:
+    n_components: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14,
+                   15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28]
+protocol: inductive
+training:
+  epochs: 1
+threshold:
+  name: validation_f1_quantile
+selection:
+  metric: f1
+  direction: maximize
+metrics:
+  vus:
+    max_window: 100
+    threshold_samples: 250
+  range:
+    recall_existence_weight: 0.2

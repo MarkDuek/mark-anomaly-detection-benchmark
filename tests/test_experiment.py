@@ -261,6 +261,7 @@ def test_creditcard_tuning_candidates() -> None:
     assert {
         **fixed.definition,
         "id": quantile.definition["id"],
+        "model": quantile.definition["model"],
         "threshold": quantile.definition["threshold"],
     } == quantile.definition
     assert [
@@ -270,6 +271,11 @@ def test_creditcard_tuning_candidates() -> None:
         20,
         26,
     ]
+    candidates = quantile.model_parameter_candidates()
+    assert [candidate["n_components"] for candidate in candidates] == list(range(1, 29))
+    for candidate in candidates:
+        assert candidate["standardize_features"] is True
+        quantile.create_model(candidate)
 
     nystrom = Experiment.from_path(
         Path(
@@ -292,6 +298,17 @@ def test_creditcard_tuning_candidates() -> None:
     }
     for candidate in candidates:
         nystrom.create_model(candidate)
+
+    maxent = Experiment.from_path(
+        Path("experiments/creditcard-maxent-pca-inductive-validation-f1-quantile.yaml"),
+        logger,
+    )
+    candidates = maxent.model_parameter_candidates()
+    assert [candidate["n_components"] for candidate in candidates] == list(range(1, 29))
+    for candidate in candidates:
+        assert candidate["standardize_features"] is True
+        assert candidate["optimizer"] == {"name": "sgd", "learning_rate": 1.0}
+        maxent.create_model(candidate)
 
 
 def write_split(path: Path, rows: tuple[tuple[int, int, int], ...]) -> None:
