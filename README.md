@@ -30,6 +30,7 @@ src/mark_ad_benchmark/
 ├── datasets/                   # data acquisition, refinement, and schema validation
 ├── metrics/                    # benchmark metric calculation and assembly
 ├── models/                     # anomaly-score model implementations
+├── optimizers/                 # shared explicit-gradient optimization updates
 ├── protocols/                  # data-access policies for model execution
 ├── thresholds/                 # validation-based score-to-label calibration
 └── visualization/              # saved-run exports for the documentation explorer

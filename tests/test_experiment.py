@@ -9,7 +9,9 @@ from mark_ad_benchmark.experiment import Experiment
 from mark_ad_benchmark.logging import ConsoleOutput, Logger
 
 
-@pytest.mark.parametrize("model_name", ["pca", "kernel_pca", "convolutional_pca"])
+@pytest.mark.parametrize(
+    "model_name", ["pca", "kernel_pca", "convolutional_pca", "maxent_pca"]
+)
 def test_inductive_training_and_testing_use_separate_artifacts(
     tmp_path: Path, capsys: pytest.CaptureFixture[str], model_name: str
 ) -> None:
@@ -17,7 +19,7 @@ def test_inductive_training_and_testing_use_separate_artifacts(
     refined_dir.mkdir(parents=True)
     write_split(refined_dir / "train.csv", ((0, 0, 0), (1, 1, 0), (2, 2, 0)))
     write_split(refined_dir / "validation.csv", ((3, 3, 0), (1, 3, 1)))
-    write_split(refined_dir / "test.csv", ((2, 2, 0), (0, 2, 1)))
+    write_split(refined_dir / "test.csv", ((2, 2, 0), (0, 3, 1)))
     manifest_root = tmp_path / "manifests"
     manifest_root.mkdir()
     manifest_path = manifest_root / "example.yaml"
@@ -59,6 +61,7 @@ def test_inductive_training_and_testing_use_separate_artifacts(
                             "pca": {},
                             "kernel_pca": {"kernel": "linear"},
                             "convolutional_pca": {"filter_order": 0},
+                            "maxent_pca": {"max_iterations": 3, "pair_batch_size": 8},
                         }[model_name],
                     },
                 },
@@ -157,6 +160,10 @@ def test_inductive_training_and_testing_use_separate_artifacts(
     assert test_diagnostics == validation_diagnostics
     if model_name == "convolutional_pca":
         assert test_diagnostics["converged"] is True
+    elif model_name == "maxent_pca":
+        assert test_diagnostics["iterations"] == 3
+        assert test_diagnostics["termination_reason"] == "iteration_budget"
+        assert not (validated.run_dir / "training_history.json").exists()
     else:
         assert test_diagnostics == {}
 

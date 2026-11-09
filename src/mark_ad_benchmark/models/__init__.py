@@ -11,6 +11,7 @@ __all__ = [
     "InductiveAnomalyModel",
     "KernelPCAModel",
     "KernelType",
+    "MaxEntPCAModel",
     "NystromKPCA",
     "NystromKPCAModel",
     "NystromKernelType",
@@ -21,6 +22,10 @@ __all__ = [
 
 
 def __getattr__(name: str):
+    if name == "MaxEntPCAModel":
+        from mark_ad_benchmark.models.maxent_pca import MaxEntPCAModel
+
+        return MaxEntPCAModel
     if name == "ConvolutionalPCAModel":
         from mark_ad_benchmark.models.convolutional_pca import ConvolutionalPCAModel
 

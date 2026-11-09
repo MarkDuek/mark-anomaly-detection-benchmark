@@ -1,6 +1,9 @@
 pca:
   module: mark_ad_benchmark.models.pca
   class: PCAModel
+maxent_pca:
+  module: mark_ad_benchmark.models.maxent_pca
+  class: MaxEntPCAModel
 kernel_pca:
   module: mark_ad_benchmark.models.kernel_pca
   class: KernelPCAModel

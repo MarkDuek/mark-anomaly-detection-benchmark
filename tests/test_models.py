@@ -8,6 +8,7 @@ from mark_ad_benchmark.models import (
     AnomalyModel,
     ConvolutionalPCAModel,
     KernelPCAModel,
+    MaxEntPCAModel,
     NystromKPCAModel,
     PCAModel,
     RobustPCAModel,
@@ -59,6 +60,11 @@ def test_anomaly_model_requires_parameter_validation() -> None:
         (
             ConvolutionalPCAModel,
             {"n_components": 1, "standardize_features": False, "filter_order": 0},
+            "n_components",
+        ),
+        (
+            MaxEntPCAModel,
+            {"n_components": 1, "standardize_features": False},
             "n_components",
         ),
         (NystromKPCAModel, {"n_components": 1}, "n_components"),
