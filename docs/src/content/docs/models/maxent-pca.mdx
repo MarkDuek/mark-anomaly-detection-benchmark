@@ -1,0 +1,249 @@
+---
+title: MaxEnt-PCA
+description: Mathematical formulation mapped to the implementation.
+---
+
+`MaxEntPCAModel` is an inductive anomaly model. It learns a linear subspace using a kernel-based entropy objective rather than PCA's variance objective, with sampled-pair SGD and SVD orthonormalization. New observations are scored by their reconstruction residuals.
+
+## Parameters
+
+| parameter | required type | default | meaning |
+| --- | --- | --- | --- |
+| `n_components` | positive `int` | no default | retained directions $K$; fewer than both training rows and features. |
+| `standardize_features` | `bool` | no default | always center; optionally divide by training standard deviations. |
+| `bandwidth_scale` | positive `int` or `float` | `2.0` | finite scale $s$ in the squared-bandwidth formula. |
+| `pair_batch_size` | positive `int` | `1024` | number $M$ of ordered pairs sampled per update. |
+| `max_iterations` | positive `int` | `1000` | fixed number of optimization updates. |
+| `random_state` | nonnegative `int` | `42` | pair-sampling seed, reset on every fit. |
+| `optimizer` | `dict` | `{"name": "sgd", "learning_rate": 0.01}` | `name` must be `"sgd"`; `learning_rate` must be a finite positive `int` or `float` ($\eta$). |
+
+## Fit
+
+Let $X$ (`matrix`) contain $P$ samples and $N$ features after preprocessing. The component matrix $C$ (`components`) has shape $N\times K$; projected samples are $Y = XC$.
+
+### 1. Standardize
+
+For raw values $a_{pj}$, with training means $\mu_j$ and scales $d_j$:
+
+$$
+X_{pj} = \frac{a_{pj} - \mu_j}{d_j}
+$$
+
+Here, $d_j$ is the training population standard deviation when enabled, otherwise one; constant features use a scale of one. Validation and test rows reuse the training statistics.
+
+```python
+# 1. center and optionally standardize training features (documentation excerpt; keep synchronized)
+scaler = StandardScaler(with_std=self.standardize_features)
+matrix = scaler.fit_transform(matrix)
+if not np.isfinite(matrix).all():
+    self._fail("MaxEnt-PCA preprocessing produced nonfinite features")
+```
+
+### 2. Initialize PCA Directions
+
+$$
+X = U\Sigma V^\mathsf T,
+\qquad
+C_0 = [v_1,\ldots,v_K]
+$$
+
+```python
+# 2. initialize pca directions using thin svd (documentation excerpt; keep synchronized)
+_, _, right = np.linalg.svd(matrix, full_matrices=False)
+components = right[: self.n_components].T.copy()
+```
+
+`right` is $V^\mathsf T$. PCA supplies the initial directions only; subsequent updates optimize the kernel-mean objective below.
+
+### 3. Compute Initial Squared Bandwidth
+
+With $y_p=C_t^\mathsf T x_p$:
+
+$$
+\sigma_t^2
+= \frac{1}{sP^2}\sum_{p,q}\lVert C_t^\mathsf T(x_p - x_q)\rVert^2
+= \frac{2}{sP}\sum_p\lVert y_p - \bar y\rVert^2
+$$
+
+```python
+# 3. compute initial squared bandwidth (documentation excerpt; keep synchronized)
+bandwidth_squared = self._bandwidth(matrix @ components)
+```
+
+The called methods compute the exact all-training-projection identity, not a sampled estimate:
+
+```python
+def _bandwidth(self, projected: np.ndarray) -> float:
+    bandwidth_squared = self._bandwidth_squared(projected, self.bandwidth_scale)
+    if not math.isfinite(bandwidth_squared) or bandwidth_squared <= 0:
+        self._fail("MaxEnt-PCA requires finite, positive projected bandwidth")
+    return bandwidth_squared
+
+@staticmethod
+def _bandwidth_squared(projected: np.ndarray, scale: float) -> float:
+    centered = projected - projected.mean(axis=0)
+    return float(2.0 * np.mean(np.sum(centered**2, axis=1)) / scale)
+```
+
+### 4. Optimize
+
+Repeat the following updates exactly `max_iterations` times; there is no convergence-based stopping.
+
+```python
+# 4. optimize for the configured update budget (documentation excerpt; keep synchronized)
+for _ in tqdm(
+    range(1, self.max_iterations + 1),
+    desc="MaxEnt-PCA",
+    unit="update",
+    disable=not sys.stderr.isatty(),
+):
+```
+
+#### 4.1. Sample Pairs
+
+$$
+(p_b,q_b) \overset{\mathrm{iid}}\sim \operatorname{Uniform}(\{1,\ldots,P\}^2),
+\qquad b = 1,\ldots,M
+$$
+
+```python
+# 4.1. sample ordered pairs (documentation excerpt; keep synchronized)
+pairs = rng.integers(len(matrix), size=(self.pair_batch_size, 2))
+```
+
+Sampling uses all training rows, with replacement and possible self-pairs; NumPy indices are zero-based.
+
+#### 4.2. Feature Differences
+
+$$
+\delta_b = x_{p_b} - x_{q_b}
+$$
+
+```python
+# 4.2. compute feature differences (documentation excerpt; keep synchronized)
+differences = matrix[pairs[:, 0]] - matrix[pairs[:, 1]]
+```
+
+#### 4.3. Kernel-Mean Gradient
+
+For fixed $\sigma$, minimize the unnormalized kernel mean:
+
+$$
+J(C;\sigma) = \frac{1}{P^2}\sum_{p,q}
+\exp\left(-\frac{\lVert C^\mathsf T(x_p - x_q)\rVert^2}{2\sigma^2}\right)
+$$
+
+This relates to estimated Rényi-2 entropy through
+
+$$
+\widehat H_2 = \frac{K}{2}\log(2\pi\sigma^2) - \log J,
+\qquad \nabla_CJ = -J\nabla_C\widehat H_2
+$$
+
+With $z_b = C^\mathsf T\delta_b$, the unbiased fixed-bandwidth gradient estimate is:
+
+$$
+\widehat{\nabla_CJ}
+= -\frac{1}{M\sigma^2}\sum_b
+\exp\left(-\frac{\lVert z_b\rVert^2}{2\sigma^2}\right)\delta_bz_b^\mathsf T
+$$
+
+```python
+# 4.3. estimate the kernel-mean gradient (documentation excerpt; keep synchronized)
+gradient = _pair_gradient(differences, components, bandwidth_squared)
+```
+
+```python
+def _pair_gradient(
+    differences: np.ndarray, components: np.ndarray, bandwidth_squared: float
+) -> np.ndarray:
+    projected = differences @ components
+    weights = np.exp(-np.sum(projected**2, axis=1) / (2.0 * bandwidth_squared))
+    return -(differences.T @ (weights[:, None] * projected)) / (
+        len(differences) * bandwidth_squared
+    )
+```
+
+`differences`, `projected`, and `gradient` have shapes $M\times N$, $M\times K$, and $N\times K$. Bandwidth is held fixed during differentiation, not differentiated through its adaptive rule.
+
+#### 4.4. SGD Update
+
+$$
+B_t = C_t - \eta\widehat{\nabla_CJ}
+$$
+
+```python
+# 4.4. update the component matrix (documentation excerpt; keep synchronized)
+candidate = optimizer.step(components, gradient)
+```
+
+The called `SGD.step()` in `optimizers/sgd.py` implements this update:
+
+```python
+def step(self, parameters: np.ndarray, gradient: np.ndarray) -> np.ndarray:
+    self._validate_step_inputs(parameters, gradient)
+    with np.errstate(over="ignore", invalid="ignore"):
+        updated = parameters - self.learning_rate * gradient
+    if not np.isfinite(updated).all():
+        self._fail("SGD produced nonfinite parameters")
+    return updated
+```
+
+Here `parameters` is $C_t$, `updated` is $B_t$. Constraints remain the model's responsibility.
+
+#### 4.5–4.6. Orthonormalize
+
+$$
+B_t = A_t\Sigma_tV_t^\mathsf T,
+\qquad
+C_{t+1} = A_tV_t^\mathsf T,
+\qquad C_{t+1}^\mathsf TC_{t+1} = I_K
+$$
+
+```python
+# 4.5. compute thin svd of the candidate (documentation excerpt; keep synchronized)
+left, _, right = np.linalg.svd(candidate, full_matrices=False)
+# 4.6. set orthonormal components (documentation excerpt; keep synchronized)
+components = left @ right
+```
+
+This SVD orthonormalizes the candidate; it does not fit PCA to the training matrix again.
+
+#### 4.7. Update Bandwidth
+
+$$
+Y_{t+1} = XC_{t+1},
+\qquad
+\sigma_{t+1}^2 = \frac{2}{sP}\sum_p\lVert y_p - \bar y\rVert^2
+$$
+
+```python
+# 4.7. recompute squared bandwidth (documentation excerpt; keep synchronized)
+bandwidth_squared = self._bandwidth(matrix @ components)
+```
+
+Uses the bandwidth methods shown above, supplying bandwidth for the next update.
+
+## Score
+
+After applying the saved training scaler:
+
+$$
+Y = XC,
+\qquad \widehat X = YC^\mathsf T,
+\qquad
+\operatorname{score}(x_p) = \lVert x_p - \widehat x_p\rVert_2
+$$
+
+```python
+# 5. score reconstruction residuals using training preprocessing (documentation excerpt; keep synchronized)
+matrix = self.scaler.transform(matrix)
+projected = matrix @ self.components
+residuals = np.linalg.norm(matrix - projected @ self.components.T, axis=1)
+```
+
+Reconstruction-residual scoring is the benchmark convention, not the paper's entropy objective.
+
+## Reference
+
+[1] R. He, B. Hu, X. Yuan, and W.-S. Zheng, “[Principal component analysis based on non-parametric maximum entropy](https://doi.org/10.1016/j.neucom.2009.12.032),” *Neurocomputing*, vol. 73, nos. 10–12, pp. 1840–1852, Jun. 2010, doi: 10.1016/j.neucom.2009.12.032.

@@ -7,28 +7,27 @@ description: Train-scaled principal-component reconstruction residuals.
 
 ## Parameters
 
-| Parameter | Required value | Meaning |
-| --- | --- | --- |
-| `n_components` | Integer from `1` to one less than the feature width | Number of principal components retained for reconstruction. |
-| `standardize_features` | Boolean | Whether to fit `StandardScaler` on training features before PCA. |
+| parameter | required type | default | meaning |
+| --- | --- | --- | --- |
+| `n_components` | `int` from `1` to one less than the feature width | no default | Number of principal components retained for reconstruction. |
+| `standardize_features` | `bool` | no default | Whether to fit `StandardScaler` on training features before PCA. |
 
 PCA itself centers its input. With `standardize_features: true`, the benchmark additionally uses [scikit-learn's `StandardScaler`](https://scikit-learn.org/stable/modules/generated/sklearn.preprocessing.StandardScaler.html) to scale every feature using training-split statistics. The fitted scaler is then reused unchanged for validation and test rows.
 
 ```python
-# 1. import PCA and StandardScaler dependencies (documentation excerpt; keep synchronized)
+# import pca and standardscaler dependencies (documentation excerpt; keep synchronized)
 from sklearn.decomposition import PCA
 from sklearn.preprocessing import StandardScaler
 
-# 2. configure PCA and optional train-fitted standardization (documentation excerpt; keep synchronized)
-self.n_components = n_components
-self.standardize_features = standardize_features
-self.logger = logger
-self.pca = PCA(n_components=n_components)
-self.scaler = StandardScaler() if standardize_features else None
+# configure pca and optional train-fitted standardization (documentation excerpt; keep synchronized)
+self.pca = PCA(n_components=self.n_components)
+self.scaler = StandardScaler() if self.standardize_features else None
 self.feature_width: int | None = None
 ```
 
 ## Fit
+
+### 1. Fit PCA
 
 The model optionally standardizes training features, then scikit-learn PCA centers the resulting matrix and retains `n_components` principal directions. `n_components` must be less than the feature width, preventing full-dimensional reconstruction.
 
@@ -41,12 +40,14 @@ $$
 The first `n_components` rows of $V^\mathsf{T}$ are the retained directions used to project and reconstruct later rows.
 
 ```python
-# 3. fit PCA on train-only scaled features (documentation excerpt; keep synchronized)
+# 1. fit pca on train-only scaled features (documentation excerpt; keep synchronized)
 self.pca.fit(self.fit_scale(features))
 self.feature_width = feature_width
 ```
 
 ## Score
+
+### 2. Reconstruction Residuals
 
 For each later feature row $x$, the model applies the fitted scaling transformation, projects the transformed row into PCA space, reconstructs it as $\hat{x}$, and uses the Euclidean residual as its anomaly score:
 
@@ -57,7 +58,7 @@ $$
 Here, $x$ is the scaled row. The model requires the same feature width used during fitting.
 
 ```python
-# 4. scale, reconstruct, and score each feature row (documentation excerpt; keep synchronized)
+# 2. scale, reconstruct, and score each feature row (documentation excerpt; keep synchronized)
 scaled = self.scale(features)
 reconstructed = self.pca.inverse_transform(self.pca.transform(scaled))
 scores = tuple(
@@ -72,8 +73,10 @@ scores = tuple(
 
 Validated inductive runs persist the fitted PCA estimator, optional fitted scaler, feature width, and configured parameters. The logger is deliberately not serialized; loading attaches the logger of the current process.
 
+### 3. Save
+
 ```python
-# 5. persist fitted PCA state without the process-specific logger (documentation excerpt; keep synchronized)
+# 3. persist fitted pca state without the process-specific logger (documentation excerpt; keep synchronized)
 pickle.dump(
     {
         "n_components": self.n_components,
@@ -86,8 +89,10 @@ pickle.dump(
 )
 ```
 
+### 4. Load
+
 ```python
-# 6. restore fitted PCA state with the current process logger (documentation excerpt; keep synchronized)
+# 4. restore fitted pca state with the current process logger (documentation excerpt; keep synchronized)
 model = cls(
     {
         "n_components": payload["n_components"],
@@ -102,4 +107,4 @@ model.scaler = payload["scaler"]
 
 ## Reference
 
-- Jolliffe, Ian T. [*Principal Component Analysis*](https://link.springer.com/book/10.1007/b98835), Springer Series in Statistics, 2002.
+[1] I. T. Jolliffe, [*Principal Component Analysis*](https://doi.org/10.1007/b98835), Springer Series in Statistics. Springer-Verlag, 2002, doi: 10.1007/b98835.

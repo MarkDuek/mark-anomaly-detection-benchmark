@@ -26,6 +26,7 @@ export default defineConfig({
           items: [
             { label: "Overview", link: "/models/" },
             { label: "PCA", link: "/models/pca/" },
+            { label: "MaxEnt-PCA", link: "/models/maxent-pca/" },
             { label: "Nyström KPCA", link: "/models/nystrom-kpca/" },
             { label: "Robust PCA", link: "/models/robust-pca/" },
           ],
