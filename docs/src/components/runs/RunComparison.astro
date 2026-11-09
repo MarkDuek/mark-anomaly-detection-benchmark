@@ -61,7 +61,14 @@
   };
   const selected = () => [...options.querySelectorAll("input:checked")].map((input) => input.value);
   const updateRunSelection = () => { runSelection.textContent = `${selected().length} run${selected().length === 1 ? "" : "s"} selected`; };
-  const refreshSelection = () => { updateRunSelection(); render(); renderCurves(); };
+  const refreshSelection = () => {
+    const url = new URL(window.location.href);
+    url.searchParams.set("dataset", datasetSelector.value);
+    url.searchParams.delete("run");
+    selected().forEach((id) => url.searchParams.append("run", id));
+    window.history.replaceState(null, "", url);
+    updateRunSelection(); render(); renderCurves();
+  };
   const entries = (run) => Object.entries(run.metric_groups || { point: run.metrics }).flatMap(([group, metrics]) =>
     Object.entries(metrics).map(([name, value]) => [`${group}.${name}`, value]),
   );
@@ -153,11 +160,21 @@
   }
   const renderOptions = () => {
     const datasetRuns = Object.entries(runs).filter(([, run]) => run.dataset_id === datasetSelector.value);
-    options.replaceChildren(...datasetRuns.map(([id, run], index) => { const label = document.createElement("label"); label.innerHTML = `<input type="checkbox" value="${id}" ${index < 2 ? "checked" : ""}> ${run.display_name} — ${run.run_time}`; label.querySelector("input").addEventListener("change", refreshSelection); return label; }));
+    const requested = new URLSearchParams(window.location.search);
+    const restore = requested.get("dataset") === datasetSelector.value;
+    const requestedRuns = new Set(requested.getAll("run"));
+    options.replaceChildren(...datasetRuns.map(([id, run], index) => { const label = document.createElement("label"); const checked = restore ? requestedRuns.has(id) : index < 2; label.innerHTML = `<input type="checkbox" value="${id}" ${checked ? "checked" : ""}> ${run.display_name} — ${run.run_time}`; label.querySelector("input").addEventListener("change", refreshSelection); return label; }));
     refreshSelection();
   };
   selectAllRuns.addEventListener("click", () => { options.querySelectorAll("input").forEach((input) => input.checked = true); refreshSelection(); });
   clearRuns.addEventListener("click", () => { options.querySelectorAll("input").forEach((input) => input.checked = false); refreshSelection(); });
   metricFamily.addEventListener("change", render);
-  fetch(`${import.meta.env.BASE_URL}runs.json`).then((response) => response.ok ? response.json() : Promise.reject()).then((data) => { runs = data; const datasets = [...new Set(Object.values(runs).map((run) => run.dataset_id))]; datasetSelector.replaceChildren(...datasets.map((dataset) => new Option(formatDataset(dataset), dataset))); datasetSelector.addEventListener("change", renderOptions); status.hidden = true; renderOptions(); }).catch(() => { status.textContent = "No generated run data is available. Run `make visualize` after creating test artifacts."; });
+  fetch(`${import.meta.env.BASE_URL}runs.json`).then((response) => response.ok ? response.json() : Promise.reject()).then((data) => {
+    runs = data;
+    const datasets = [...new Set(Object.values(runs).map((run) => run.dataset_id))];
+    datasetSelector.replaceChildren(...datasets.map((dataset) => new Option(formatDataset(dataset), dataset)));
+    const requestedDataset = new URLSearchParams(window.location.search).get("dataset");
+    if (datasets.includes(requestedDataset)) datasetSelector.value = requestedDataset;
+    datasetSelector.addEventListener("change", renderOptions); status.hidden = true; renderOptions();
+  }).catch(() => { status.textContent = "No generated run data is available. Run `make visualize` after creating test artifacts."; });
 </script>
