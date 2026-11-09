@@ -7,6 +7,7 @@
   <section id="selected-run" hidden>
     <h2 id="experiment-summary">Experiment summary</h2>
     <p><strong id="experiment-id"></strong><br /><code id="run-id"></code></p>
+    <p id="training-link-container" hidden><a id="training-link" target="_blank" rel="noopener">Open training diagnostics ↗</a></p>
     <div id="metric-summary" class="metric-summary"></div>
     <section class="run-configuration" aria-labelledby="configuration-heading">
       <h3 id="configuration-heading">Run configuration</h3>
@@ -194,6 +195,8 @@
 
   function renderRun() {
     const id = selector.value; const run = runs[id];
+    document.querySelector("#training-link-container").hidden = !run.training_url;
+    document.querySelector("#training-link").href = run.training_url ? `${import.meta.env.BASE_URL}${run.training_url}` : "";
     document.querySelector("#experiment-id").textContent = run.display_name; document.querySelector("#run-id").textContent = `${run.run_time}  ${id}`;
     featureOptions.replaceChildren(...Object.keys(run.features).map((feature, index) => { const label = document.createElement("label"); label.innerHTML = `<input type="checkbox" value="${feature}" ${index < 4 ? "checked" : ""}><span>${rawFeatureName(run, feature)} <small>(${feature})</small></span>`; label.querySelector("input").addEventListener("change", () => renderPlot(run)); return label; }));
     renderMetrics(run); renderConfiguration(run); renderPlot(run); renderCurves(run);

@@ -3,3 +3,4 @@ dist/
 node_modules/
 runs.json
 public/run-curves/
+public/run-training/

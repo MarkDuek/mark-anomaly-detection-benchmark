@@ -2,6 +2,7 @@ import csv
 import json
 import math
 import re
+import shutil
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -10,6 +11,7 @@ from plotly.utils import PlotlyJSONEncoder
 
 from mark_ad_benchmark.datasets.loader import DatasetSplit, load_refined_dataset
 from mark_ad_benchmark.logging import ComponentLogger
+from mark_ad_benchmark.visualization.training import visualize_training
 
 MAX_DISPLAY_POINTS = 5_000
 
@@ -34,10 +36,17 @@ def visualize_runs(
     logger.info(f"Exporting {len(test_run_ids)} saved test {run_label}")
     runs: dict[str, dict[str, object]] = {}
     curve_assets: dict[str, dict[str, object]] = {}
+    training_assets: dict[str, Path | None] = {}
     for index, test_run_id in enumerate(test_run_ids, start=1):
         logger.info(f"Exporting test run {index}/{len(test_run_ids)}: {test_run_id}")
         test_dir = runs_root / test_run_id
         test_manifest = json.loads((test_dir / "manifest.json").read_text())
+        validated_run = test_manifest["validated_run"]
+        if validated_run not in training_assets:
+            training_assets[validated_run] = visualize_training(
+                runs_root / validated_run,
+                logger.for_component("mark_ad_benchmark.visualization.training"),
+            )
         curve_assets[test_run_id] = {
             "validation": load_run_curves(
                 runs_root / test_manifest["validated_run"], "validation", logger
@@ -53,6 +62,13 @@ def visualize_runs(
             datasets,
         )
         runs[test_run_id]["curves_url"] = f"run-curves/{test_run_id}.json"
+        if training_assets[validated_run] is not None:
+            runs[test_run_id]["training_url"] = f"run-training/{validated_run}.html"
+    for validated_run, path in training_assets.items():
+        if path is not None:
+            training_dir = docs_output_path.parent / "run-training"
+            training_dir.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(path, training_dir / f"{validated_run}.html")
     curves_dir = docs_output_path.parent / "run-curves"
     curves_dir.mkdir(parents=True, exist_ok=True)
     for test_run_id, curves in curve_assets.items():
@@ -204,7 +220,7 @@ def run_display_name(run_id: str) -> str:
     experiment = re.sub(r"^\d{8}T\d{6}\d*Z-", "", run_id)
     experiment = re.sub(r"-(validated|test)$", "", experiment)
     return " ".join(
-        {"pca": "PCA", "robust": "Robust"}.get(word, word.title())
+        {"pca": "PCA", "robust": "Robust", "maxent": "MaxEnt"}.get(word, word.title())
         for word in experiment.replace("_", "-").split("-")
     )
 

@@ -8,6 +8,7 @@ component_levels:
   mark_ad_benchmark.metrics.evaluation: info
   mark_ad_benchmark.protocols.transductive: info
   mark_ad_benchmark.visualization.timeseries: info
+  mark_ad_benchmark.visualization.training: info
   mark_ad_benchmark.datasets.ingest: info
   mark_ad_benchmark.datasets.loader: info
   mark_ad_benchmark.datasets.refine: info

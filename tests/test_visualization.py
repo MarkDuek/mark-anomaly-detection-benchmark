@@ -108,6 +108,28 @@ def test_visualization_exports_saved_test_run(
             json.dumps(ranking_curves((0, 1), (0.2, 0.8), threshold))
         )
 
+    assert (
+        timeseries.visualize_training(
+            validated_dir,
+            Logger().for_component("mark_ad_benchmark.visualization.training"),
+        )
+        is None
+    )
+    (validated_dir / "training_history.json").write_text(
+        json.dumps(
+            [
+                {
+                    "iteration": iteration,
+                    "estimated_entropy": 2.0 + iteration,
+                    "projected_gradient_norm": 0.1,
+                    "subspace_change": 0.01,
+                    "bandwidth_squared": 1.0,
+                }
+                for iteration in (0, 10)
+            ]
+        )
+    )
+
     output_path = visualize_runs(
         Logger(ConsoleOutput()).for_component(
             "mark_ad_benchmark.visualization.timeseries"
@@ -129,6 +151,12 @@ def test_visualization_exports_saved_test_run(
     assert exported_run["run_time"] is None
     assert exported_run["feature_labels"] == {"feature_0": "feature_0"}
     assert exported_run["curves_url"] == "run-curves/test-run.json"
+    assert exported_run["training_url"] == "run-training/validated-run.html"
+    training_html = (validated_dir / "training.html").read_text()
+    assert "Estimated entropy" in training_html
+    assert "Monitoring tangent-gradient norm" in training_html
+    assert "Adaptive bandwidth" in training_html
+    assert (tmp_path / exported_run["training_url"]).read_text() == training_html
     assert "curves" not in exported_run
     curves = json.loads((tmp_path / exported_run["curves_url"]).read_text())
     assert curves["validation"]["threshold"] == 0.6
