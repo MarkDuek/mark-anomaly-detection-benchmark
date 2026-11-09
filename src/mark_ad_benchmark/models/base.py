@@ -6,7 +6,11 @@ from mark_ad_benchmark.logging import ComponentLogger
 
 
 class AnomalyModel(ABC):
-    """Base capability marker for anomaly models."""
+    """Common parameter-validation contract for anomaly models."""
+
+    @abstractmethod
+    def validate_parameters(self) -> None:
+        """Reject invalid model parameters independently of feature data."""
 
 
 class InductiveAnomalyModel(AnomalyModel):

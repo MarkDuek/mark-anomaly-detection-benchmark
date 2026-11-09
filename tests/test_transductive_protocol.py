@@ -20,6 +20,9 @@ class TrackingModel(TransductiveAnomalyModel):
     def __init__(self) -> None:
         self.batches: list[Sequence[Sequence[float]]] = []
 
+    def validate_parameters(self) -> None:
+        pass
+
     @property
     def diagnostics(self) -> Mapping[str, object]:
         return {}

@@ -3,7 +3,7 @@ import pickle
 from collections.abc import Mapping, Sequence
 from pathlib import Path
 
-# 1. import PCA and StandardScaler dependencies (documentation excerpt; keep synchronized)
+# import pca and standardscaler dependencies (documentation excerpt; keep synchronized)
 from sklearn.decomposition import PCA
 from sklearn.preprocessing import StandardScaler
 
@@ -17,29 +17,30 @@ class PCAModel(InductiveAnomalyModel):
     def __init__(
         self, parameters: Mapping[str, object], logger: ComponentLogger
     ) -> None:
-        n_components = parameters.get("n_components")
-        if not isinstance(n_components, int):
+        self.logger = logger
+        self.n_components = parameters.get("n_components")
+        self.standardize_features = parameters.get("standardize_features")
+        self.validate_parameters()
+
+        # configure pca and optional train-fitted standardization (documentation excerpt; keep synchronized)
+        self.pca = PCA(n_components=self.n_components)
+        self.scaler = StandardScaler() if self.standardize_features else None
+        self.feature_width: int | None = None
+
+    def validate_parameters(self) -> None:
+        if not isinstance(self.n_components, int):
             message = "PCA n_components must be an integer"
-            logger.error(message)
+            self.logger.error(message)
             raise TypeError(message)
-        if n_components < 1:
+        if self.n_components < 1:
             message = "PCA requires at least one component"
-            logger.error(message)
+            self.logger.error(message)
             raise ValueError(message)
 
-        standardize_features = parameters.get("standardize_features")
-        if not isinstance(standardize_features, bool):
+        if not isinstance(self.standardize_features, bool):
             message = "PCA standardize_features must be a boolean"
-            logger.error(message)
+            self.logger.error(message)
             raise TypeError(message)
-
-        # 2. configure PCA and optional train-fitted standardization (documentation excerpt; keep synchronized)
-        self.n_components = n_components
-        self.standardize_features = standardize_features
-        self.logger = logger
-        self.pca = PCA(n_components=n_components)
-        self.scaler = StandardScaler() if standardize_features else None
-        self.feature_width: int | None = None
 
     def fit(self, features: Sequence[Sequence[float]]) -> None:
         """Fit PCA on training feature rows with fewer components than features."""
@@ -52,7 +53,7 @@ class PCAModel(InductiveAnomalyModel):
             f"Fitting PCA with {self.n_components} components on {len(features)} rows"
         )
 
-        # 3. fit PCA on train-only scaled features (documentation excerpt; keep synchronized)
+        # 1. fit pca on train-only scaled features (documentation excerpt; keep synchronized)
         self.pca.fit(self.fit_scale(features))
         self.feature_width = feature_width
 
@@ -67,7 +68,7 @@ class PCAModel(InductiveAnomalyModel):
             self.logger.error(message)
             raise ValueError(message)
 
-        # 4. scale, reconstruct, and score each feature row (documentation excerpt; keep synchronized)
+        # 2. scale, reconstruct, and score each feature row (documentation excerpt; keep synchronized)
         scaled = self.scale(features)
         reconstructed = self.pca.inverse_transform(self.pca.transform(scaled))
         scores = tuple(
@@ -86,7 +87,7 @@ class PCAModel(InductiveAnomalyModel):
             self.logger.error(message)
             raise ValueError(message)
 
-        # 5. persist fitted PCA state without the process-specific logger (documentation excerpt; keep synchronized)
+        # 3. persist fitted pca state without the process-specific logger (documentation excerpt; keep synchronized)
         with path.open("wb") as file:
             pickle.dump(
                 {
@@ -106,7 +107,7 @@ class PCAModel(InductiveAnomalyModel):
         with path.open("rb") as file:
             payload = pickle.load(file)
 
-        # 6. restore fitted PCA state with the current process logger (documentation excerpt; keep synchronized)
+        # 4. restore fitted pca state with the current process logger (documentation excerpt; keep synchronized)
         model = cls(
             {
                 "n_components": payload["n_components"],

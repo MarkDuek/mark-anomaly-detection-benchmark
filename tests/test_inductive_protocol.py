@@ -22,6 +22,9 @@ class TrackingModel(AnomalyModel):
         self.fit_features: Sequence[Sequence[float]] | None = None
         self.scored_features: list[Sequence[Sequence[float]]] = []
 
+    def validate_parameters(self) -> None:
+        pass
+
     def fit(self, features: Sequence[Sequence[float]]) -> None:
         self.fit_features = features
 

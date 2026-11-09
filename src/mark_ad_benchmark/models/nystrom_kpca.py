@@ -22,10 +22,12 @@ class NystromKernelType(StrEnum):
 
 
 def _uniform_landmarks(matrix: np.ndarray, count: int, seed: int | None) -> np.ndarray:
+    # 1. sample distinct landmark indices (documentation excerpt; keep synchronized)
     indices = np.random.default_rng(seed).choice(len(matrix), count, replace=False)
     return matrix[indices]
 
 
+# configure landmark samplers (documentation excerpt; keep synchronized)
 _LANDMARK_SAMPLERS = {"uniform": _uniform_landmarks}
 
 
@@ -50,63 +52,21 @@ class NystromKPCA:
         logger: ComponentLogger | None = None,
     ) -> None:
         self.logger = logger
-        if n_components is not None and (
-            not isinstance(n_components, int)
-            or isinstance(n_components, bool)
-            or n_components < 1
-        ):
-            self._fail("Nyström KPCA n_components must be a positive integer or None")
-        if (
-            not isinstance(n_landmarks, int)
-            or isinstance(n_landmarks, bool)
-            or n_landmarks < 1
-        ):
-            self._fail("Nyström KPCA n_landmarks must be a positive integer")
-        try:
-            self.kernel = NystromKernelType(kernel)
-        except (ValueError, TypeError):
-            self._fail("Nyström KPCA kernel must be linear, poly, or rbf")
-        self.kernel_params = self._kernel_parameters(kernel_params)
-        if sampling not in _LANDMARK_SAMPLERS:
-            self._fail("Nyström KPCA sampling must be uniform")
-        if nystrom_solver not in ("eigh", "svd") or pca_solver not in ("eigh", "svd"):
-            self._fail("Nyström KPCA solvers must be eigh or svd")
-        if eigenvalue_strategy != "truncate":
-            self._fail("Nyström KPCA eigenvalue_strategy must be truncate")
-        if (
-            not isinstance(eigenvalue_tol, (int, float))
-            or isinstance(eigenvalue_tol, bool)
-            or not math.isfinite(eigenvalue_tol)
-            or eigenvalue_tol <= 0
-        ):
-            self._fail("Nyström KPCA eigenvalue_tol must be finite and positive")
-        if eigenvalue_tol_mode not in ("absolute", "relative"):
-            self._fail("Nyström KPCA eigenvalue_tol_mode must be absolute or relative")
-        if covariance_normalization not in ("population", "sample"):
-            self._fail(
-                "Nyström KPCA covariance_normalization must be population or sample"
-            )
-        if random_state is not None and (
-            not isinstance(random_state, int)
-            or isinstance(random_state, bool)
-            or random_state < 0
-        ):
-            self._fail(
-                "Nyström KPCA random_state must be a nonnegative integer or None"
-            )
-        if not isinstance(standardize_features, bool):
-            self._fail("Nyström KPCA standardize_features must be a boolean")
         self.n_components = n_components
         self.n_landmarks = n_landmarks
+        self.kernel = kernel
+        self.kernel_params = kernel_params
         self.sampling = sampling
         self.nystrom_solver = nystrom_solver
         self.pca_solver = pca_solver
         self.eigenvalue_strategy = eigenvalue_strategy
-        self.eigenvalue_tol = float(eigenvalue_tol)
+        self.eigenvalue_tol = eigenvalue_tol
         self.eigenvalue_tol_mode = eigenvalue_tol_mode
         self.covariance_normalization = covariance_normalization
         self.random_state = random_state
         self.standardize_features = standardize_features
+        self.validate_parameters()
+        self.eigenvalue_tol = float(self.eigenvalue_tol)
         self.landmarks_: np.ndarray | None = None
         self.normalizer_: np.ndarray | None = None
         self.feature_mean_: np.ndarray | None = None
@@ -116,6 +76,57 @@ class NystromKPCA:
         self.feature_explained_variance_: np.ndarray | None = None
         self.feature_explained_variance_ratio_: np.ndarray | None = None
         self.feature_total_variance_: float | None = None
+
+    def validate_parameters(self) -> None:
+        if self.n_components is not None and (
+            not isinstance(self.n_components, int)
+            or isinstance(self.n_components, bool)
+            or self.n_components < 1
+        ):
+            self._fail("Nyström KPCA n_components must be a positive integer or None")
+        if (
+            not isinstance(self.n_landmarks, int)
+            or isinstance(self.n_landmarks, bool)
+            or self.n_landmarks < 1
+        ):
+            self._fail("Nyström KPCA n_landmarks must be a positive integer")
+        try:
+            self.kernel = NystromKernelType(self.kernel)
+        except (ValueError, TypeError):
+            self._fail("Nyström KPCA kernel must be linear, poly, or rbf")
+        self.kernel_params = self._kernel_parameters(self.kernel_params)
+        if self.sampling not in _LANDMARK_SAMPLERS:
+            self._fail("Nyström KPCA sampling must be uniform")
+        if self.nystrom_solver not in ("eigh", "svd") or self.pca_solver not in (
+            "eigh",
+            "svd",
+        ):
+            self._fail("Nyström KPCA solvers must be eigh or svd")
+        if self.eigenvalue_strategy != "truncate":
+            self._fail("Nyström KPCA eigenvalue_strategy must be truncate")
+        if (
+            not isinstance(self.eigenvalue_tol, (int, float))
+            or isinstance(self.eigenvalue_tol, bool)
+            or not math.isfinite(self.eigenvalue_tol)
+            or self.eigenvalue_tol <= 0
+        ):
+            self._fail("Nyström KPCA eigenvalue_tol must be finite and positive")
+        if self.eigenvalue_tol_mode not in ("absolute", "relative"):
+            self._fail("Nyström KPCA eigenvalue_tol_mode must be absolute or relative")
+        if self.covariance_normalization not in ("population", "sample"):
+            self._fail(
+                "Nyström KPCA covariance_normalization must be population or sample"
+            )
+        if self.random_state is not None and (
+            not isinstance(self.random_state, int)
+            or isinstance(self.random_state, bool)
+            or self.random_state < 0
+        ):
+            self._fail(
+                "Nyström KPCA random_state must be a nonnegative integer or None"
+            )
+        if not isinstance(self.standardize_features, bool):
+            self._fail("Nyström KPCA standardize_features must be a boolean")
 
     def fit(self, features: Sequence[Sequence[float]]) -> "NystromKPCA":
         """Learn landmarks, normalization, centering, and PCA from training rows."""
@@ -138,23 +149,24 @@ class NystromKPCA:
                 f"Fitting Nyström KPCA on {len(matrix)} rows with {self.n_landmarks} landmarks"
             )
 
-        # 1–3. Landmark selection and only the cross- and landmark-kernel matrices.
+        # 1. select landmarks (documentation excerpt; keep synchronized)
         landmarks = _LANDMARK_SAMPLERS[self.sampling](
             matrix, self.n_landmarks, self.random_state
         )
+        # 3. evaluate observation-landmark kernels (documentation excerpt; keep synchronized)
         landmark_kernel = self._kernel_matrix(landmarks, landmarks)
         cross_kernel = self._kernel_matrix(matrix, landmarks)
 
-        # 4. Orthonormal coordinates in the mapped landmark subspace.
+        # 4. construct orthonormal nystrom coordinates (documentation excerpt; keep synchronized)
         normalizer = self._normalizer(landmark_kernel)
         z = cross_kernel @ normalizer
         del cross_kernel, landmark_kernel
 
-        # 5. Center the Nyström features using training rows only.
+        # 5. center coordinates using training rows (documentation excerpt; keep synchronized)
         feature_mean = z.mean(axis=0)
         z -= feature_mean
 
-        # 6–7. Covariance directions or equivalent thin SVD directions.
+        # 6. solve covariance directions or thin svd (documentation excerpt; keep synchronized)
         denominator = (
             len(matrix)
             if self.covariance_normalization == "population"
@@ -169,6 +181,7 @@ class NystromKPCA:
             _, singular_values, right = np.linalg.svd(z, full_matrices=False)
             eigenvalues = singular_values**2 / denominator
             directions = right.T
+        # 7. select the retained component count (documentation excerpt; keep synchronized)
         total_variance = float(np.einsum("ij,ij->", z, z) / denominator)
         rank_tol = np.finfo(float).eps * max(z.shape) * max(0.0, float(eigenvalues[0]))
         if not math.isfinite(total_variance) or total_variance <= rank_tol:
@@ -185,16 +198,18 @@ class NystromKPCA:
         self.landmarks_ = landmarks
         self.normalizer_ = normalizer
         self.feature_mean_ = feature_mean
+        # 8. retain principal directions (documentation excerpt; keep synchronized)
         self.components_ = directions[:, :retained].copy()
         self.scaler_ = scaler
         self.feature_width_ = matrix.shape[1]
+        # 7. record explained variance (documentation excerpt; keep synchronized)
         self.feature_total_variance_ = total_variance
         self.feature_explained_variance_ = np.maximum(eigenvalues[:retained], 0)
         self.feature_explained_variance_ratio_ = (
             self.feature_explained_variance_ / total_variance
         )
 
-        # 8. Conventional, unwhitened component scores.
+        # 8. project training observations (documentation excerpt; keep synchronized)
         projection = z @ self.components_
         if self.logger is not None:
             self.logger.info(
@@ -204,6 +219,7 @@ class NystromKPCA:
 
     def transform(self, features: Sequence[Sequence[float]]) -> np.ndarray:
         """Project new observations using unchanged training landmarks and mean."""
+        # 9. project new rows (documentation excerpt; keep synchronized)
         centered = self._centered_features(features)
         projection = centered @ self.components_
         if not np.isfinite(projection).all():
@@ -225,6 +241,7 @@ class NystromKPCA:
             matrix = self.scaler_.transform(matrix)
         if not len(matrix):
             return np.empty((0, self.normalizer_.shape[1]))
+        # 9. map and center new rows (documentation excerpt; keep synchronized)
         cross_kernel = self._kernel_matrix(matrix, self.landmarks_)
         centered = cross_kernel @ self.normalizer_ - self.feature_mean_
         if not np.isfinite(centered).all():
@@ -233,6 +250,7 @@ class NystromKPCA:
 
     def _normalizer(self, landmark_kernel: np.ndarray) -> np.ndarray:
         landmark_kernel = (landmark_kernel + landmark_kernel.T) / 2
+        # 4. solve and truncate the landmark kernel (documentation excerpt; keep synchronized)
         if self.nystrom_solver == "eigh":
             values, vectors = np.linalg.eigh(landmark_kernel)
             indices = np.argsort(values)[::-1]
@@ -329,6 +347,10 @@ class NystromKPCAModel(InductiveAnomalyModel):
         self.logger = logger
         self.parameters = dict(parameters)
         self.estimator = NystromKPCA(**self.parameters, logger=logger)
+        self.validate_parameters()
+
+    def validate_parameters(self) -> None:
+        self.estimator.validate_parameters()
 
     def fit(self, features: Sequence[Sequence[float]]) -> None:
         self.estimator.fit(features)
@@ -340,6 +362,7 @@ class NystromKPCAModel(InductiveAnomalyModel):
 
     def score(self, features: Sequence[Sequence[float]]) -> tuple[float, ...]:
         """Return Euclidean reconstruction residuals in centered Nyström space."""
+        # 10. score centered reconstruction residuals (documentation excerpt; keep synchronized)
         centered = self.estimator._centered_features(features)
         projected = centered @ self.estimator.components_
         residuals = np.linalg.norm(

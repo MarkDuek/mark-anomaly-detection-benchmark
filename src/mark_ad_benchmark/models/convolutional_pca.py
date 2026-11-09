@@ -25,6 +25,12 @@ class ConvolutionalPCAModel(InductiveAnomalyModel):
         self.standardize_features = parameters.get("standardize_features")
         self.step_size = parameters.get("step_size", 0.2)
         self.max_iterations = parameters.get("max_iterations", 200)
+        self.validate_parameters()
+        self.scaler = StandardScaler(with_std=self.standardize_features)
+        self.filters: np.ndarray | None = None
+        self._diagnostics: dict[str, object] = {}
+
+    def validate_parameters(self) -> None:
         for name, value, minimum in (
             ("n_components", self.n_components, 1),
             ("filter_order", self.filter_order, 0),
@@ -41,9 +47,6 @@ class ConvolutionalPCAModel(InductiveAnomalyModel):
             or self.step_size <= 0
         ):
             self._fail("Convolutional PCA step_size must be finite and positive")
-        self.scaler = StandardScaler(with_std=self.standardize_features)
-        self.filters: np.ndarray | None = None
-        self._diagnostics: dict[str, object] = {}
 
     @property
     def diagnostics(self) -> Mapping[str, object]:

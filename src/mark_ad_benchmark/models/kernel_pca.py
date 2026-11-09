@@ -29,21 +29,9 @@ class KernelPCAModel(InductiveAnomalyModel):
         self.logger = logger
         self.n_components = parameters.get("n_components")
         self.standardize_features = parameters.get("standardize_features")
-        if (
-            not isinstance(self.n_components, int)
-            or isinstance(self.n_components, bool)
-            or self.n_components < 1
-        ):
-            self._fail("Kernel PCA n_components must be a positive integer")
-        try:
-            self.kernel = KernelType(parameters.get("kernel"))
-        except (TypeError, ValueError):
-            self._fail("Kernel PCA kernel must be linear, poly, or rbf")
-        if not isinstance(self.standardize_features, bool):
-            self._fail("Kernel PCA standardize_features must be a boolean")
-        self.kernel_parameters = self._validate_kernel_parameters(
-            parameters.get("kernel_parameters", {})
-        )
+        self.kernel = parameters.get("kernel")
+        self.kernel_parameters = parameters.get("kernel_parameters", {})
+        self.validate_parameters()
         self.pca = KernelPCA(
             n_components=self.n_components,
             kernel="precomputed",
@@ -53,6 +41,23 @@ class KernelPCAModel(InductiveAnomalyModel):
         self.scaler = StandardScaler() if self.standardize_features else None
         self.train_features: np.ndarray | None = None
         self.kernel_mean = 0.0
+
+    def validate_parameters(self) -> None:
+        if (
+            not isinstance(self.n_components, int)
+            or isinstance(self.n_components, bool)
+            or self.n_components < 1
+        ):
+            self._fail("Kernel PCA n_components must be a positive integer")
+        try:
+            self.kernel = KernelType(self.kernel)
+        except (TypeError, ValueError):
+            self._fail("Kernel PCA kernel must be linear, poly, or rbf")
+        if not isinstance(self.standardize_features, bool):
+            self._fail("Kernel PCA standardize_features must be a boolean")
+        self.kernel_parameters = self._validate_kernel_parameters(
+            self.kernel_parameters
+        )
 
     def fit(self, features: Sequence[Sequence[float]]) -> None:
         """Fit scaling, kernel centering, and principal directions on train only."""
