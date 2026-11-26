@@ -27,6 +27,7 @@ export default defineConfig({
             { label: "Overview", link: "/models/" },
             { label: "PCA", link: "/models/pca/" },
             { label: "MaxEnt-PCA", link: "/models/maxent-pca/" },
+            { label: "ConvPCA", link: "/models/convolutional-pca/" },
             { label: "Nyström KPCA", link: "/models/nystrom-kpca/" },
             { label: "Robust PCA", link: "/models/robust-pca/" },
           ],

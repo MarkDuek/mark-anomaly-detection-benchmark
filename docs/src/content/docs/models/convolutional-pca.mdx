@@ -1,0 +1,292 @@
+---
+title: ConvPCA
+description: Finite-filter convolutional PCA mapped to the implementation.
+---
+
+`ConvolutionalPCAModel` is an inductive anomaly model. It learns finite temporal filters that encode multivariate observations into fewer component series and reconstruct the observations from those series. The batch solver follows the upstream MATLAB implementation [2] of Li's method [1], not the repository's adaptive or sparse variants; anomaly scores are per-timestamp reconstruction residuals.
+
+## Parameters
+
+| parameter | required type | default | meaning |
+| --- | --- | --- | --- |
+| `n_components` | positive `int` | no default | number $K$ of component series; fewer than the feature width $N$. |
+| `filter_order` | nonnegative `int` | no default | order $L$, giving $L+1$ filter taps; training rows must exceed $2L$. |
+| `standardize_features` | `bool` | no default | always center; optionally divide by training standard deviations. |
+| `step_size` | positive `int` or `float` | `0.2` | finite step size $\eta$, multiplied by the power normalization below. |
+| `max_iterations` | positive `int` | `200` | maximum number of momentum updates; convergence can stop fitting earlier. |
+
+The iteration default belongs to the model; experiment definitions may specify a larger budget.
+
+## Fit
+
+Let $X$ (`matrix`) contain $P$ samples and $N$ features after preprocessing. Each row corresponds to a column vector $x_t\in\mathbb R^N$, with zero-based time index $t$. The filter tensor $W$ (`filters`) has shape $(L+1)\times N\times K$; its tap matrices are $W_0,\ldots,W_L$. Sequences are zero outside their observed range.
+
+### 1. Standardize
+
+For raw values $a_{tj}$, with training means $\mu_j$ and scales $d_j$:
+
+$$
+X_{tj} = \frac{a_{tj}-\mu_j}{d_j}
+$$
+
+Here, $d_j$ is the training population standard deviation when enabled, otherwise one; constant features use a scale of one. Validation and test rows reuse the saved training statistics without refitting.
+
+The scaler is configured in `__init__()` and fitted in `fit()`:
+
+```python
+self.scaler = StandardScaler(with_std=self.standardize_features)
+```
+
+```python
+matrix = self.scaler.fit_transform(matrix)
+```
+
+### 2. Compute Lag Correlations
+
+For lags $h=0,\ldots,2L$:
+
+$$
+R_h = \frac{1}{P}\sum_{t=h}^{P-1}x_tx_{t-h}^{\mathsf T},
+\qquad R_{-h}=R_h^{\mathsf T}
+$$
+
+Every lag uses the same denominator $P$, not $P-h$, matching zero-padded finite-sequence correlations. The array `correlations` has shape $(4L+1)\times N\times N$ and stores $R_h$ at index $2L+h$.
+
+```python
+correlations = _lag_correlations(matrix, self.filter_order)
+```
+
+The called helper implements this indexing directly:
+
+```python
+def _lag_correlations(matrix: np.ndarray, order: int) -> np.ndarray:
+    width = matrix.shape[1]
+    correlations = np.zeros((4 * order + 1, width, width))
+    correlations[2 * order] = matrix.T @ matrix / len(matrix)
+    for lag in range(1, 2 * order + 1):
+        covariance = matrix[lag:].T @ matrix[:-lag] / len(matrix)
+        correlations[2 * order + lag] = covariance
+        correlations[2 * order - lag] = covariance.T
+    return correlations
+```
+
+### 3. Initialize Filters
+
+Initialize a deterministic cosine basis $Q\in\mathbb R^{N\times K}$:
+
+$$
+Q_{jk}=\alpha_k\cos\left(\frac{\pi(j+1/2)k}{N}\right),
+\qquad
+\alpha_0=\frac{1}{\sqrt N},
+\quad \alpha_k=\sqrt{\frac{2}{N}}\ \text{for }k>0
+$$
+
+Feature and component indices are $j=0,\ldots,N-1$ and $k=0,\ldots,K-1$. Place this basis at tap $\lfloor L/2\rfloor$ and set all other taps to zero:
+
+```python
+frequencies = np.arange(self.n_components)
+basis = np.cos(
+    np.pi * (np.arange(width)[:, None] + 0.5) * frequencies[None, :] / width
+) * np.sqrt(2.0 / width)
+basis[:, 0] /= np.sqrt(2.0)
+filters = np.zeros((self.filter_order + 1, width, self.n_components))
+filters[self.filter_order // 2] = basis
+```
+
+Unlike MaxEnt-PCA, this initialization does not fit PCA or use random sampling.
+
+### 4. Optimize
+
+#### 4.1. Full Reconstruction Objective
+
+Define the reversed-transpose filter taps $W^r_\ell=W_{L-\ell}^{\mathsf T}$. Encoding and synthesis use full linear convolution:
+
+$$
+y_u=\sum_{\ell=0}^{L}W^r_\ell x_{u-\ell},
+\qquad
+r_v=\sum_{\ell=0}^{L}W_\ell y_{v-\ell}
+$$
+
+The encoded sequence has $P+L$ rows and the synthesized sequence has $P+2L$ rows. Training minimizes the full zero-padded reconstruction error:
+
+$$
+J(W)=\frac{1}{P}\sum_{v=0}^{P+2L-1}
+\left\lVert x_{v-L}-r_v\right\rVert_2^2
+$$
+
+This includes reconstruction energy outside the observed interval, where the target is zero. It is normalized by the number of training rows, not by the feature count or padded length.
+
+The implementation evaluates this objective through coefficient-array products. For arrays $A$ and $B$, define
+
+$$
+(A*B)_s=\sum_{i+j=s}A_iB_j
+$$
+
+These are matrix products within a convolution of coefficient indices, not elementwise products:
+
+```python
+def _polynomial_product(left: np.ndarray, right: np.ndarray) -> np.ndarray:
+    product = np.zeros((len(left) + len(right) - 1, left.shape[1], right.shape[2]))
+    for i, coefficient in enumerate(left):
+        for j, other in enumerate(right):
+            product[i + j] += coefficient @ other
+    return product
+```
+
+The real-valued adjoint helper reverses the coefficient axis and transposes each matrix:
+
+```python
+def _adjoint(filters: np.ndarray) -> np.ndarray:
+    return filters[::-1].transpose(0, 2, 1)
+```
+
+Let $C_s=R_{s-2L}$ be the stored correlation array, and define
+
+$$
+A=C*W,\qquad B=W^r*A,\qquad D=W^r*W
+$$
+
+The zero-lag component covariance is $S=B_{3L}$. In these stored-array indices, the same objective is
+
+$$
+J(W)=\operatorname{tr}(C_{2L})-2\operatorname{tr}(B_{3L})
++\sum_{q=0}^{2L}\langle D_q,B_{2L+q}\rangle_F
+$$
+
+Here $\langle U,V\rangle_F=\sum_{i,j}U_{ij}V_{ij}$. The corresponding body of `_objective_gradient()` is:
+
+```python
+order = len(filters) - 1
+rx_w = _polynomial_product(correlations, filters)
+wh_rx_w = _polynomial_product(_adjoint(filters), rx_w)
+wh_w = _polynomial_product(_adjoint(filters), filters)
+component_covariance = wh_rx_w[3 * order]
+error = (
+    np.trace(correlations[2 * order])
+    - 2 * np.trace(component_covariance)
+    + np.sum(wh_w * wh_rx_w[2 * order : 4 * order + 1])
+)
+```
+
+#### 4.2. Truncated Gradient
+
+For real-valued filters, the helper returns
+
+$$
+G(W)=\frac{1}{2}\nabla_W J(W)
+$$
+
+The factor of one half follows the upstream MATLAB solver. The slices retain only the $L+1$ supported filter coefficients; they are not a sampled gradient approximation.
+
+```python
+gradient = -2 * rx_w[2 * order : 3 * order + 1]
+term1 = _polynomial_product(filters, wh_rx_w[2 * order : 4 * order + 1])
+gradient += term1[order : 2 * order + 1]
+term2 = _polynomial_product(rx_w[order : 4 * order + 1], wh_w)
+gradient += term2[2 * order : 3 * order + 1]
+```
+
+`gradient` has the same shape as `filters`. The existing finite-difference check in `tests/test_convolutional_pca.py` verifies that twice this gradient matches the derivative of the time-domain objective.
+
+#### 4.3. Momentum and Power Normalization
+
+For positive training power $p=\operatorname{tr}(R_0)$, define $a=N/p$ (`scale_squared`). With $M_0=0$:
+
+$$
+M_{t+1}=0.9M_t+0.1G(W_t),
+\qquad
+W_{t+1}=W_t-\eta aM_{t+1}
+$$
+
+```python
+power = float(np.trace(correlations[2 * self.filter_order]))
+iterations, converged = 0, power == 0.0
+if power > 0.0:
+    scale_squared = width / power
+    momentum = np.zeros_like(filters)
+    for iterations in range(1, self.max_iterations + 1):
+        _, gradient, _ = _objective_gradient(correlations, filters)
+        momentum = 0.9 * momentum + 0.1 * gradient
+        filters = filters - self.step_size * scale_squared * momentum
+```
+
+This is full-batch momentum descent implemented inside ConvPCA, not the shared SGD optimizer used by MaxEnt-PCA. There is no SVD orthonormalization or exact paraunitary projection at each update.
+
+#### 4.4. Stopping and Diagnostics
+
+After applying an update, the solver checks its pre-update gradient:
+
+$$
+a\max_{\ell,j,k}|G(W_t)_{\ell jk}|<10^{-6}
+$$
+
+```python
+if scale_squared * np.max(np.abs(gradient)) < 1e-6:
+    converged = True
+    break
+```
+
+Zero training power skips optimization and reports convergence with zero iterations. Otherwise, the solver stops at the criterion or the iteration budget; nonfinite filters or fitting error raise an exception. Diagnostics report `iterations`, `converged`, and `fitting_mse`, recomputed at the final filters and clipped below at zero for numerical roundoff. Reaching the budget does not imply convergence, and the criterion does not establish a global optimum.
+
+### 5. Rotate Components
+
+Recompute the zero-lag component covariance $S$ at the final filters, then find an orthogonal rotation $V$:
+
+$$
+S+S^{\mathsf T}=V\Lambda V^{\mathsf T},
+\qquad W_\ell\leftarrow W_\ell V
+$$
+
+```python
+error, _, component_covariance = _objective_gradient(correlations, filters)
+```
+
+```python
+_, rotation = np.linalg.eigh(component_covariance + component_covariance.T)
+self.filters = filters @ rotation
+```
+
+This diagonalizes the component covariance without changing the encode/decode reconstruction, since $VV^{\mathsf T}=I_K$. The eigenvectors are not reordered into descending-variance order. The rotation does not make the finite filters exactly paraunitary.
+
+## Score
+
+For a validation or test split with $Q$ rows, apply the saved training scaler and the same full encoding and synthesis operations. Align the reconstruction by removing $L$ rows from each end, then score:
+
+$$
+\widehat x_t=r_{t+L},
+\qquad
+\operatorname{score}(x_t)=\lVert x_t-\widehat x_t\rVert_2,
+\qquad t=0,\ldots,Q-1
+$$
+
+```python
+matrix = self.scaler.transform(matrix)
+components = _apply_filter(_adjoint(self.filters), matrix)
+reconstructed = _apply_filter(self.filters, components)
+reconstructed = reconstructed[
+    self.filter_order : self.filter_order + len(matrix)
+]
+residuals = np.linalg.norm(matrix - reconstructed, axis=1)
+```
+
+The called helper performs zero-padded full linear convolution:
+
+```python
+def _apply_filter(filters: np.ndarray, matrix: np.ndarray) -> np.ndarray:
+    result = np.zeros((len(matrix) + len(filters) - 1, filters.shape[1]))
+    for lag, coefficient in enumerate(filters):
+        result[lag : lag + len(matrix)] += matrix @ coefficient.T
+    return result
+```
+
+Each split is scored independently, without refitting or borrowing rows across split boundaries. Scores are in preprocessed feature units, and larger values indicate poorer reconstruction. Unlike the fitting objective, scoring excludes the padded tails and returns one unsquared L2 residual per observed timestamp.
+
+For positive order, reconstruction at time $t$ can depend on observations from $t-L$ through $t+L$. This is retrospective batch scoring, not causal online detection; zero padding can affect boundary scores.
+
+At order zero, the reconstruction is $\widehat x_t=W_0W_0^{\mathsf T}x_t$. The objective reduces to the static PCA reconstruction objective, but a finite optimization budget need not recover the PCA solution.
+
+## Reference
+
+[1] X.-L. Li, “[Convolutional PCA for Multiple Time Series](https://doi.org/10.1109/LSP.2020.3016185),” *IEEE Signal Processing Letters*, vol. 27, pp. 1450–1454, 2020, doi: 10.1109/LSP.2020.3016185.
+
+[2] lixilinx, “[ConvPCA](https://github.com/lixilinx/ConvPCA/tree/f10362cfdf4235d811ef6d0da823c9a54556b47b),” *GitHub*. Accessed: Nov. 10, 2026. [Online].
