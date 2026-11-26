@@ -6,6 +6,7 @@ import rehypeKatex from "rehype-katex";
 import remarkMath from "remark-math";
 
 export default defineConfig({
+  base: "/mark-anomaly-detection-benchmark/",
   integrations: [
     starlight({
       title: "Mark's Multivariate Anomaly Detection Benchmark",
