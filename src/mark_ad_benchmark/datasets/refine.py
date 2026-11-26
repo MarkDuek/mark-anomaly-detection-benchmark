@@ -30,9 +30,16 @@ def refine_dataset(
             message = f"Checksum mismatch for {raw_path}"
             logger.error(message)
             raise ValueError(message)
-        validate_csv(raw_path, raw_schema)
+        normal_only = split in manifest.get("normal_only_splits", [])
+        validate_csv(raw_path, raw_schema, normal_only=normal_only)
+        if normal_only:
+            logger.info(
+                f"Assigning normal labels to declared normal-only {split} split"
+            )
         refined_path = refined_dir / f"{split}.csv"
-        refine_csv(raw_path, refined_path, raw_schema, refined_schema)
+        refine_csv(
+            raw_path, refined_path, raw_schema, refined_schema, normal_only=normal_only
+        )
         validate_csv(refined_path, refined_schema)
         refined_checksums[split] = sha256(refined_path)
         logger.info(f"Refined {split} split: {refined_path}")
@@ -46,12 +53,15 @@ def refine_csv(
     refined_path: Path,
     raw_schema: dict[str, object],
     refined_schema: dict[str, object],
+    *,
+    normal_only: bool = False,
 ) -> None:
     raw_columns = [
         raw_schema["timestamp"],
         *raw_schema["features"],
-        raw_schema["label"],
     ]
+    if not normal_only:
+        raw_columns.append(raw_schema["label"])
     refined_columns = [
         refined_schema["timestamp"],
         *refined_schema["features"],
@@ -67,6 +77,7 @@ def refine_csv(
         )
         writer.writeheader()
         for row in reader:
-            writer.writerow(
-                dict(zip(refined_columns, (row[column] for column in raw_columns)))
-            )
+            values = [row[column] for column in raw_columns]
+            if normal_only:
+                values.append("0")
+            writer.writerow(dict(zip(refined_columns, values, strict=True)))

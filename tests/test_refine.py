@@ -8,16 +8,25 @@ from mark_ad_benchmark.datasets.refine import refine_dataset
 from mark_ad_benchmark.logging import Logger
 
 
-def test_refine_dataset_writes_canonical_columns(tmp_path: Path) -> None:
+@pytest.mark.parametrize("normal_only", [False, True])
+def test_refine_dataset_writes_canonical_columns(
+    tmp_path: Path, normal_only: bool
+) -> None:
     manifest_path = tmp_path / "dataset.yaml"
     raw_path = tmp_path / "raw" / "example" / "train.csv"
     raw_path.parent.mkdir(parents=True)
-    raw_path.write_text("time,first,second,Label\n2025-01-01,1,2,0\n")
+    raw_contents = (
+        "time,first,second\n2025-01-01,1,2\n"
+        if normal_only
+        else "time,first,second,Label\n2025-01-01,1,2,0\n"
+    )
+    raw_path.write_text(raw_contents)
     manifest_path.write_text(
         yaml.safe_dump(
             {
                 "id": "example",
                 "files": {"train": "source/train.csv"},
+                "normal_only_splits": ["train"] if normal_only else [],
                 "raw_schema": {
                     "timestamp": "time",
                     "features": ["first", "second"],
@@ -45,6 +54,7 @@ def test_refine_dataset_writes_canonical_columns(tmp_path: Path) -> None:
         refined_path.read_text()
         == "timestamp,feature_0,feature_1,label\n2025-01-01,1,2,0\n"
     )
+    assert raw_path.read_text() == raw_contents
     assert yaml.safe_load(manifest_path.read_text())["checksums"]["refined"][
         "train"
     ] == sha256(refined_path)

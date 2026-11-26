@@ -1,5 +1,6 @@
 import csv
 import hashlib
+import math
 import shutil
 from pathlib import Path
 
@@ -43,7 +44,11 @@ def ingest_dataset(
         target_path = dataset_dir / Path(remote_path).name
         if not target_path.exists():
             shutil.copy2(downloaded_path, target_path)
-        validate_csv(target_path, manifest["raw_schema"])
+        validate_csv(
+            target_path,
+            manifest["raw_schema"],
+            normal_only=split in manifest.get("normal_only_splits", []),
+        )
         checksums[split] = sha256(target_path)
         logger.info(f"Validated raw {split} split: {target_path}")
 
@@ -51,8 +56,13 @@ def ingest_dataset(
     logger.info(f"Completed raw dataset ingestion: {manifest['id']}")
 
 
-def validate_csv(path: Path, schema: dict[str, object]) -> None:
-    expected_columns = [schema["timestamp"], *schema["features"], schema["label"]]
+def validate_csv(
+    path: Path, schema: dict[str, object], *, normal_only: bool = False
+) -> None:
+    """Validate labeled CSVs or explicitly declared unlabeled normal-only sources."""
+    expected_columns = [schema["timestamp"], *schema["features"]]
+    if not normal_only:
+        expected_columns.append(schema["label"])
     with path.open(newline="") as file:
         reader = csv.DictReader(file)
         if reader.fieldnames != expected_columns:
@@ -60,11 +70,12 @@ def validate_csv(path: Path, schema: dict[str, object]) -> None:
 
         row_count = 0
         for row in reader:
-            if any(not row[column] for column in expected_columns):
+            if None in row or any(not row[column] for column in expected_columns):
                 raise ValueError(f"Missing value in {path}")
             for feature in schema["features"]:
-                float(row[feature])
-            if row[schema["label"]] not in {"0", "1"}:
+                if not math.isfinite(float(row[feature])):
+                    raise ValueError(f"Nonfinite feature in {path}: {feature}")
+            if not normal_only and row[schema["label"]] not in {"0", "1"}:
                 raise ValueError(f"Invalid label in {path}: {row[schema['label']]}")
             row_count += 1
 
