@@ -15,12 +15,17 @@ class RobustPCAModel(TransductiveAnomalyModel):
     """Principal Component Pursuit with row-wise sparse L1 anomaly scores."""
 
     def __init__(
-        self, parameters: Mapping[str, object], logger: ComponentLogger
+        self,
+        *,
+        logger: ComponentLogger,
+        lambda_value: float,
+        tolerance: float,
+        max_iterations: int,
     ) -> None:
         # configure robust pca solver parameters (documentation excerpt; keep synchronized)
-        self.lambda_value = parameters.get("lambda")
-        self.tolerance = parameters.get("tolerance")
-        self.max_iterations = parameters.get("max_iterations")
+        self.lambda_value = lambda_value
+        self.tolerance = tolerance
+        self.max_iterations = max_iterations
         self.logger = logger
         self.validate_parameters()
         self.low_rank_component: tuple[tuple[float, ...], ...] | None = None

@@ -17,13 +17,13 @@ QUERY = ((2.0, 3.0), (10.0, -3.0))
 
 def model(kernel: str = "linear", **parameters: object) -> KernelPCAModel:
     return KernelPCAModel(
-        {
+        logger=Logger().for_component("mark_ad_benchmark.models.kernel_pca"),
+        **{
             "n_components": 1,
             "kernel": kernel,
             "standardize_features": False,
             **parameters,
         },
-        Logger().for_component("mark_ad_benchmark.models.kernel_pca"),
     )
 
 
@@ -31,8 +31,9 @@ def model(kernel: str = "linear", **parameters: object) -> KernelPCAModel:
 def test_linear_kernel_matches_pca_residuals(standardize_features: bool) -> None:
     kernel_pca = model(standardize_features=standardize_features)
     pca = PCAModel(
-        {"n_components": 1, "standardize_features": standardize_features},
-        Logger().for_component("mark_ad_benchmark.models.pca"),
+        n_components=1,
+        standardize_features=standardize_features,
+        logger=Logger().for_component("mark_ad_benchmark.models.pca"),
     )
     kernel_pca.fit(TRAIN)
     pca.fit(TRAIN)
@@ -72,6 +73,7 @@ def test_default_kernel_parameters(
 ) -> None:
     assert model(kernel).kernel_parameters == expected
     assert model(kernel, kernel_parameters={}).kernel_parameters == expected
+    assert model(kernel, kernel_parameters=None).kernel_parameters == expected
 
 
 def test_partial_polynomial_parameters_preserve_input() -> None:
@@ -243,7 +245,7 @@ def test_rejects_unsupported_kernel_parameters(
         model(kernel, kernel_parameters=parameters)
 
 
-@pytest.mark.parametrize("parameters", [None, [], "gamma", 1])
+@pytest.mark.parametrize("parameters", [[], "gamma", 1])
 def test_rejects_non_mapping_kernel_parameters(parameters: object) -> None:
     with pytest.raises(ValueError, match="kernel_parameters must be a mapping"):
         model(kernel_parameters=parameters)

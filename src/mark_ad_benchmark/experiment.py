@@ -508,10 +508,16 @@ class Experiment:
 
     def create_model(self, parameters: dict[str, object] | None = None) -> object:
         """Instantiate the configured model with a component-scoped logger."""
-        return self.model_type(
-            parameters or self.definition["model"]["parameters"],
-            self.logger.for_component(self.model_module),
+        parameters = (
+            self.definition["model"]["parameters"] if parameters is None else parameters
         )
+        logger = self.logger.for_component(self.model_module)
+        if "lambda" in parameters:
+            parameters = dict(parameters)
+            return self.model_type(
+                logger=logger, lambda_value=parameters.pop("lambda"), **parameters
+            )
+        return self.model_type(logger=logger, **parameters)
 
     def model_parameter_candidates(self) -> tuple[dict[str, object], ...]:
         """Expand a parameter grid or merge explicit candidates with base parameters."""

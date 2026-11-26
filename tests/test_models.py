@@ -70,7 +70,7 @@ def test_anomaly_model_requires_parameter_validation() -> None:
         (NystromKPCAModel, {"n_components": 1}, "n_components"),
         (
             RobustPCAModel,
-            {"lambda": 0.1, "tolerance": 1e-6, "max_iterations": 10},
+            {"lambda_value": 0.1, "tolerance": 1e-6, "max_iterations": 10},
             "max_iterations",
         ),
     ],
@@ -78,8 +78,14 @@ def test_anomaly_model_requires_parameter_validation() -> None:
 def test_models_validate_parameters_without_feature_data(
     model_class, parameters, attribute
 ) -> None:
-    model = model_class(parameters, Logger().for_component(model_class.__module__))
+    logger = Logger().for_component(model_class.__module__)
+    model = model_class(logger=logger, **parameters)
     assert model.validate_parameters() is None
+    assert not hasattr(model, "parameters")
+    with pytest.raises(TypeError, match="unexpected keyword argument"):
+        model_class(logger=logger, **parameters, unknown_parameter=True)
+    with pytest.raises(TypeError):
+        model_class(parameters, logger)
 
     target = getattr(model, "estimator", model)
     setattr(target, attribute, 0)

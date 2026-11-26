@@ -14,13 +14,13 @@ from mark_ad_benchmark.models.convolutional_pca import (
 
 def model(**parameters: object) -> ConvolutionalPCAModel:
     return ConvolutionalPCAModel(
-        {
+        logger=Logger().for_component("mark_ad_benchmark.models.convolutional_pca"),
+        **{
             "n_components": 1,
             "filter_order": 2,
             "standardize_features": False,
             **parameters,
         },
-        Logger().for_component("mark_ad_benchmark.models.convolutional_pca"),
     )
 
 
@@ -107,8 +107,9 @@ def test_zero_order_reduces_to_pca(standardize_features: bool) -> None:
         filter_order=0, max_iterations=1000, standardize_features=standardize_features
     )
     pca = PCAModel(
-        {"n_components": 1, "standardize_features": standardize_features},
-        Logger().for_component("mark_ad_benchmark.models.pca"),
+        n_components=1,
+        standardize_features=standardize_features,
+        logger=Logger().for_component("mark_ad_benchmark.models.pca"),
     )
     convolutional.fit(train)
     pca.fit(train)
@@ -151,8 +152,9 @@ def test_temporal_filters_improve_on_static_pca_for_delayed_signals() -> None:
     convolutional = model(filter_order=4, max_iterations=500)
     convolutional.fit(features)
     pca = PCAModel(
-        {"n_components": 1, "standardize_features": False},
-        Logger().for_component("mark_ad_benchmark.models.pca"),
+        n_components=1,
+        standardize_features=False,
+        logger=Logger().for_component("mark_ad_benchmark.models.pca"),
     )
     pca.fit(features)
 

@@ -13,12 +13,10 @@ def test_robust_pca_recovers_sparse_component_and_scores_its_row_l1_norm() -> No
     sparse[8, 2] = -10.0
     features = tuple(tuple(row) for row in low_rank + sparse)
     model = RobustPCAModel(
-        {
-            "lambda": 1 / np.sqrt(12),
-            "tolerance": 1e-7,
-            "max_iterations": 1000,
-        },
-        Logger().for_component("mark_ad_benchmark.models.robust_pca"),
+        lambda_value=1 / np.sqrt(12),
+        tolerance=1e-7,
+        max_iterations=1000,
+        logger=Logger().for_component("mark_ad_benchmark.models.robust_pca"),
     )
 
     scores = model.fit_score(features)
@@ -32,11 +30,9 @@ def test_robust_pca_recovers_sparse_component_and_scores_its_row_l1_norm() -> No
 
 
 def test_robust_pca_requires_explicit_solver_parameters() -> None:
-    with pytest.raises(ValueError, match="lambda"):
+    with pytest.raises(TypeError, match="lambda_value"):
         RobustPCAModel(
-            {
-                "tolerance": 1e-7,
-                "max_iterations": 1000,
-            },
-            Logger().for_component("mark_ad_benchmark.models.robust_pca"),
+            tolerance=1e-7,
+            max_iterations=1000,
+            logger=Logger().for_component("mark_ad_benchmark.models.robust_pca"),
         )

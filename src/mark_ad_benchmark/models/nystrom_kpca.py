@@ -36,6 +36,7 @@ class NystromKPCA:
 
     def __init__(
         self,
+        *,
         n_components: int | None = None,
         n_landmarks: int = 100,
         kernel: str = "rbf",
@@ -342,11 +343,40 @@ class NystromKPCAModel(InductiveAnomalyModel):
     """Benchmark adapter scoring centered Nyström reconstruction residuals."""
 
     def __init__(
-        self, parameters: Mapping[str, object], logger: ComponentLogger
+        self,
+        *,
+        logger: ComponentLogger,
+        n_components: int | None = None,
+        n_landmarks: int = 100,
+        kernel: str = "rbf",
+        kernel_params: Mapping[str, object] | None = None,
+        sampling: str = "uniform",
+        nystrom_solver: str = "eigh",
+        pca_solver: str = "eigh",
+        eigenvalue_strategy: str = "truncate",
+        eigenvalue_tol: float = 1e-12,
+        eigenvalue_tol_mode: str = "absolute",
+        covariance_normalization: str = "population",
+        random_state: int | None = None,
+        standardize_features: bool = False,
     ) -> None:
         self.logger = logger
-        self.parameters = dict(parameters)
-        self.estimator = NystromKPCA(**self.parameters, logger=logger)
+        self.estimator = NystromKPCA(
+            logger=logger,
+            n_components=n_components,
+            n_landmarks=n_landmarks,
+            kernel=kernel,
+            kernel_params=kernel_params,
+            sampling=sampling,
+            nystrom_solver=nystrom_solver,
+            pca_solver=pca_solver,
+            eigenvalue_strategy=eigenvalue_strategy,
+            eigenvalue_tol=eigenvalue_tol,
+            eigenvalue_tol_mode=eigenvalue_tol_mode,
+            covariance_normalization=covariance_normalization,
+            random_state=random_state,
+            standardize_features=standardize_features,
+        )
         self.validate_parameters()
 
     def validate_parameters(self) -> None:
@@ -395,8 +425,27 @@ class NystromKPCAModel(InductiveAnomalyModel):
                 "feature_total_variance_",
             )
         }
+        parameters = {
+            name: getattr(self.estimator, name)
+            for name in (
+                "n_components",
+                "n_landmarks",
+                "kernel",
+                "kernel_params",
+                "sampling",
+                "nystrom_solver",
+                "pca_solver",
+                "eigenvalue_strategy",
+                "eigenvalue_tol",
+                "eigenvalue_tol_mode",
+                "covariance_normalization",
+                "random_state",
+                "standardize_features",
+            )
+        }
+        parameters["kernel"] = self.estimator.kernel.value
         with path.open("wb") as file:
-            pickle.dump({"parameters": self.parameters, "state": state}, file)
+            pickle.dump({"parameters": parameters, "state": state}, file)
         self.logger.info(f"Saved fitted Nyström KPCA model: {path}")
 
     @classmethod
@@ -404,7 +453,7 @@ class NystromKPCAModel(InductiveAnomalyModel):
         """Restore a trusted local fitted artifact with the current logger."""
         with path.open("rb") as file:
             payload = pickle.load(file)
-        model = cls(payload["parameters"], logger)
+        model = cls(logger=logger, **payload["parameters"])
         for name, value in payload["state"].items():
             setattr(model.estimator, name, value)
         logger.info(f"Loaded fitted Nyström KPCA model: {path}")

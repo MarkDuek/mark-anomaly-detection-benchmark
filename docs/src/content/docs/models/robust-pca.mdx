@@ -13,14 +13,16 @@ description: Transductive low-rank plus sparse decomposition with L1 anomaly sco
 | `tolerance` | positive `int` or `float` | no default | Relative Frobenius-norm convergence tolerance. |
 | `max_iterations` | positive `int` | no default | Maximum solver iterations. |
 
+The Python constructor uses the keyword `lambda_value`; the experiment runner translates the YAML key `lambda` without changing experiment definitions or saved manifests.
+
 ```python
 # import standardscaler dependency (documentation excerpt; keep synchronized)
 from sklearn.preprocessing import StandardScaler
 
 # configure robust pca solver parameters (documentation excerpt; keep synchronized)
-self.lambda_value = parameters.get("lambda")
-self.tolerance = parameters.get("tolerance")
-self.max_iterations = parameters.get("max_iterations")
+self.lambda_value = lambda_value
+self.tolerance = tolerance
+self.max_iterations = max_iterations
 self.logger = logger
 self.validate_parameters()
 ```

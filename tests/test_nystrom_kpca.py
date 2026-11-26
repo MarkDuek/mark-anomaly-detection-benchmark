@@ -112,14 +112,12 @@ def test_all_components_reconstruct_and_transform_does_not_refit() -> None:
 def test_benchmark_residuals_and_persistence(kernel: str, tmp_path: Path) -> None:
     logger = Logger().for_component("mark_ad_benchmark.models.nystrom_kpca")
     model = NystromKPCAModel(
-        {
-            "n_components": 1,
-            "n_landmarks": 3,
-            "kernel": kernel,
-            "standardize_features": True,
-            "random_state": 42,
-        },
-        logger,
+        n_components=1,
+        n_landmarks=3,
+        kernel=kernel,
+        standardize_features=True,
+        random_state=42,
+        logger=logger,
     )
     model.fit(TRAIN)
     centered = model.estimator._centered_features(QUERY)
@@ -141,6 +139,21 @@ def test_benchmark_residuals_and_persistence(kernel: str, tmp_path: Path) -> Non
     np.testing.assert_allclose(
         loaded.estimator.transform(QUERY), model.estimator.transform(QUERY)
     )
+
+
+def test_save_uses_current_estimator_settings(tmp_path: Path) -> None:
+    logger = Logger().for_component("mark_ad_benchmark.models.nystrom_kpca")
+    model = NystromKPCAModel(
+        logger=logger, n_components=1, n_landmarks=3, random_state=42
+    )
+    model.estimator.n_landmarks = 4
+    model.fit(TRAIN)
+    path = tmp_path / "model.pkl"
+    model.save(path)
+
+    loaded = NystromKPCAModel.load(path, logger)
+    assert loaded.estimator.n_landmarks == len(loaded.estimator.landmarks_) == 4
+    assert loaded.score(QUERY) == pytest.approx(model.score(QUERY))
 
 
 def test_no_full_training_matrix_is_evaluated(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -224,7 +237,7 @@ def test_rejects_degenerate_or_uninformative_fit() -> None:
         NystromKPCA(n_landmarks=3, n_components=3, kernel="linear").fit(TRAIN)
     logger = Logger().for_component("mark_ad_benchmark.models.nystrom_kpca")
     full_rank_adapter = NystromKPCAModel(
-        {"n_landmarks": 3, "n_components": None}, logger
+        n_landmarks=3, n_components=None, logger=logger
     )
     with pytest.raises(ValueError, match="fewer components than effective rank"):
         full_rank_adapter.fit(TRAIN)
@@ -233,7 +246,7 @@ def test_rejects_degenerate_or_uninformative_fit() -> None:
     with pytest.raises(ValueError, match="fitted before saving"):
         full_rank_adapter.save(Path("unused.pkl"))
     with pytest.raises(ValueError, match="fewer components than effective rank"):
-        NystromKPCAModel({"n_landmarks": 3, "n_components": 3}, logger).fit(TRAIN)
+        NystromKPCAModel(n_landmarks=3, n_components=3, logger=logger).fit(TRAIN)
 
 
 def test_invalid_features_and_kernel_parameters() -> None:

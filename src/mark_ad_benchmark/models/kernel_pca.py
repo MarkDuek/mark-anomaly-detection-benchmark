@@ -24,13 +24,19 @@ class KernelPCAModel(InductiveAnomalyModel):
     """Train-centered Kernel PCA with feature-space reconstruction residuals."""
 
     def __init__(
-        self, parameters: Mapping[str, object], logger: ComponentLogger
+        self,
+        *,
+        logger: ComponentLogger,
+        n_components: int,
+        standardize_features: bool,
+        kernel: str,
+        kernel_parameters: Mapping[str, object] | None = None,
     ) -> None:
         self.logger = logger
-        self.n_components = parameters.get("n_components")
-        self.standardize_features = parameters.get("standardize_features")
-        self.kernel = parameters.get("kernel")
-        self.kernel_parameters = parameters.get("kernel_parameters", {})
+        self.n_components = n_components
+        self.standardize_features = standardize_features
+        self.kernel = kernel
+        self.kernel_parameters = {} if kernel_parameters is None else kernel_parameters
         self.validate_parameters()
         self.pca = KernelPCA(
             n_components=self.n_components,
@@ -138,7 +144,7 @@ class KernelPCAModel(InductiveAnomalyModel):
         """Restore fitted Kernel PCA state from a trusted local artifact."""
         with path.open("rb") as file:
             payload = pickle.load(file)
-        model = cls(payload["parameters"], logger)
+        model = cls(logger=logger, **payload["parameters"])
         model.pca = payload["pca"]
         model.scaler = payload["scaler"]
         model.train_features = payload["train_features"]

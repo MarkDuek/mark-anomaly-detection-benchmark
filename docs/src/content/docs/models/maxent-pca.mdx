@@ -15,7 +15,7 @@ description: Mathematical formulation mapped to the implementation.
 | `pair_batch_size` | positive `int` | `1024` | number $M$ of ordered pairs sampled per update. |
 | `max_iterations` | positive `int` | `1000` | fixed number of optimization updates. |
 | `random_state` | nonnegative `int` | `42` | pair-sampling seed, reset on every fit. |
-| `optimizer` | `dict` | `{"name": "sgd", "learning_rate": 0.01}` | `name` must be `"sgd"`; `learning_rate` must be a finite positive `int` or `float` ($\eta$). |
+| `optimizer` | mapping or `None` | `None` | `None` uses `{"name": "sgd", "learning_rate": 0.01}`; otherwise `name` must be `"sgd"` and `learning_rate` a finite positive `int` or `float` ($\eta$). |
 
 ## Fit
 

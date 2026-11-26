@@ -25,32 +25,33 @@ class MaxEntPCAModel(InductiveAnomalyModel):
     """Learn an orthonormal subspace with sampled pairs and score L2 residuals."""
 
     def __init__(
-        self, parameters: Mapping[str, object], logger: ComponentLogger
+        self,
+        *,
+        logger: ComponentLogger,
+        n_components: int,
+        standardize_features: bool,
+        bandwidth_scale: float = 2.0,
+        pair_batch_size: int = 1024,
+        max_iterations: int = 1000,
+        random_state: int = 42,
+        optimizer: Mapping[str, object] | None = None,
     ) -> None:
         self.logger = logger
-        self.n_components = parameters.get("n_components")
-        self.standardize_features = parameters.get("standardize_features")
-        self.bandwidth_scale = parameters.get("bandwidth_scale", 2.0)
-        self.pair_batch_size = parameters.get("pair_batch_size", 1024)
-        self.max_iterations = parameters.get("max_iterations", 1000)
-        self.random_state = parameters.get("random_state", 42)
+        self.n_components = n_components
+        self.standardize_features = standardize_features
+        self.bandwidth_scale = bandwidth_scale
+        self.pair_batch_size = pair_batch_size
+        self.max_iterations = max_iterations
+        self.random_state = random_state
 
         self.validate_parameters()
-        optimizer_settings = parameters.get(
-            "optimizer", {"name": "sgd", "learning_rate": 0.01}
+        optimizer_settings = (
+            {"name": "sgd", "learning_rate": 0.01} if optimizer is None else optimizer
         )
         self.optimizer = create_optimizer(
             optimizer_settings, logger.for_component("mark_ad_benchmark.optimizers")
         )
-        self.parameters = {
-            "n_components": self.n_components,
-            "standardize_features": self.standardize_features,
-            "bandwidth_scale": self.bandwidth_scale,
-            "pair_batch_size": self.pair_batch_size,
-            "max_iterations": self.max_iterations,
-            "random_state": self.random_state,
-            "optimizer": dict(optimizer_settings),
-        }
+        self.optimizer_settings = dict(optimizer_settings)
         self.components: np.ndarray | None = None
         self.scaler: StandardScaler | None = None
         self._diagnostics: dict[str, object] = {}
@@ -100,7 +101,7 @@ class MaxEntPCAModel(InductiveAnomalyModel):
         components = right[: self.n_components].T.copy()
         # initialize optimizer
         optimizer = create_optimizer(
-            self.parameters["optimizer"],
+            self.optimizer_settings,
             self.logger.for_component("mark_ad_benchmark.optimizers"),
         )
         # seed random generator for pair sampling
@@ -166,7 +167,15 @@ class MaxEntPCAModel(InductiveAnomalyModel):
         with path.open("wb") as file:
             pickle.dump(
                 {
-                    "parameters": self.parameters,
+                    "parameters": {
+                        "n_components": self.n_components,
+                        "standardize_features": self.standardize_features,
+                        "bandwidth_scale": self.bandwidth_scale,
+                        "pair_batch_size": self.pair_batch_size,
+                        "max_iterations": self.max_iterations,
+                        "random_state": self.random_state,
+                        "optimizer": self.optimizer_settings,
+                    },
                     "components": self.components,
                     "scaler": self.scaler,
                     "diagnostics": self._diagnostics,
@@ -180,7 +189,7 @@ class MaxEntPCAModel(InductiveAnomalyModel):
         """Restore a trusted local artifact without fitting or sampling."""
         with path.open("rb") as file:
             payload = pickle.load(file)
-        model = cls(payload["parameters"], logger)
+        model = cls(logger=logger, **payload["parameters"])
         model.components = payload["components"]
         model.scaler = payload["scaler"]
         model._diagnostics = payload["diagnostics"]

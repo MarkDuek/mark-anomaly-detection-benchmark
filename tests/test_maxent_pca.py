@@ -15,14 +15,14 @@ from mark_ad_benchmark.protocols import InductiveProtocol
 
 def model(**overrides) -> MaxEntPCAModel:
     return MaxEntPCAModel(
-        {
+        logger=Logger().for_component("mark_ad_benchmark.models.maxent_pca"),
+        **{
             "n_components": 1,
             "standardize_features": False,
             "max_iterations": 5,
             "pair_batch_size": 16,
             **overrides,
         },
-        Logger().for_component("mark_ad_benchmark.models.maxent_pca"),
     )
 
 
@@ -99,7 +99,7 @@ def test_protocol_scoring_matches_baseline_convention_and_preserves_state(
     diagnostics = dict(fitted.diagnostics)
     scores = protocol.score_validation(fitted)
     baseline = PCAModel(
-        {"n_components": 1, "standardize_features": standardize}, fitted.logger
+        n_components=1, standardize_features=standardize, logger=fitted.logger
     )
     baseline.fit(protocol.train.features)
 
@@ -116,7 +116,8 @@ def test_protocol_scoring_matches_baseline_convention_and_preserves_state(
     path = tmp_path / "model.pkl"
     fitted.save(path)
     with path.open("rb") as file:
-        assert set(pickle.load(file)) == {
+        payload = pickle.load(file)
+        assert set(payload) == {
             "parameters",
             "components",
             "scaler",
@@ -125,7 +126,9 @@ def test_protocol_scoring_matches_baseline_convention_and_preserves_state(
     restored = MaxEntPCAModel.load(path, fitted.logger)
     assert protocol.score_validation(restored) == scores
     assert restored.diagnostics == diagnostics
-    assert restored.parameters == fitted.parameters
+    for name, value in payload["parameters"].items():
+        attribute = "optimizer_settings" if name == "optimizer" else name
+        assert getattr(restored, attribute) == getattr(fitted, attribute) == value
 
 
 def test_sampling_is_seeded_and_every_fit_resets_sampling() -> None:
@@ -167,8 +170,25 @@ def test_fit_uses_one_sampled_pair_batch_per_iteration(monkeypatch) -> None:
         pairs = rng.integers(len(matrix), size=(7, 2))
         np.testing.assert_array_equal(batch, scaled[pairs[:, 0]] - scaled[pairs[:, 1]])
     assert not hasattr(fitted, "training_history")
-    assert "monitor_interval" not in fitted.parameters
+    assert not hasattr(fitted, "parameters")
     assert fitted.scaler.n_samples_seen_ == len(matrix)
+
+
+def test_save_uses_current_settings_and_fit_resets_optimizer(tmp_path: Path) -> None:
+    settings = {"name": "sgd", "learning_rate": 0.1}
+    fitted = model(optimizer=settings)
+    settings["learning_rate"] = 100.0
+    fitted.max_iterations = 7
+    optimizer = fitted.optimizer
+    fitted.fit(((0.0, 0.0), (1.0, 1.0), (2.0, 2.0)))
+    assert fitted.optimizer is not optimizer
+    assert fitted.optimizer.learning_rate == 0.1
+    path = tmp_path / "model.pkl"
+    fitted.save(path)
+
+    restored = MaxEntPCAModel.load(path, fitted.logger)
+    assert restored.max_iterations == restored.diagnostics["iterations"] == 7
+    assert restored.optimizer_settings == {"name": "sgd", "learning_rate": 0.1}
 
 
 @pytest.mark.parametrize(

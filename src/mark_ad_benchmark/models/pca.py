@@ -1,6 +1,6 @@
 import math
 import pickle
-from collections.abc import Mapping, Sequence
+from collections.abc import Sequence
 from pathlib import Path
 
 # import pca and standardscaler dependencies (documentation excerpt; keep synchronized)
@@ -15,11 +15,15 @@ class PCAModel(InductiveAnomalyModel):
     """Configurable train-scaled PCA with Euclidean reconstruction-residual scores."""
 
     def __init__(
-        self, parameters: Mapping[str, object], logger: ComponentLogger
+        self,
+        *,
+        logger: ComponentLogger,
+        n_components: int,
+        standardize_features: bool,
     ) -> None:
         self.logger = logger
-        self.n_components = parameters.get("n_components")
-        self.standardize_features = parameters.get("standardize_features")
+        self.n_components = n_components
+        self.standardize_features = standardize_features
         self.validate_parameters()
 
         # configure pca and optional train-fitted standardization (documentation excerpt; keep synchronized)
@@ -109,11 +113,9 @@ class PCAModel(InductiveAnomalyModel):
 
         # 4. restore fitted pca state with the current process logger (documentation excerpt; keep synchronized)
         model = cls(
-            {
-                "n_components": payload["n_components"],
-                "standardize_features": payload["standardize_features"],
-            },
-            logger,
+            logger=logger,
+            n_components=payload["n_components"],
+            standardize_features=payload["standardize_features"],
         )
         model.feature_width = payload["feature_width"]
         model.pca = payload["pca"]

@@ -17,14 +17,21 @@ class ConvolutionalPCAModel(InductiveAnomalyModel):
     """Learn finite convolutional filters and score timestamp reconstruction errors."""
 
     def __init__(
-        self, parameters: Mapping[str, object], logger: ComponentLogger
+        self,
+        *,
+        logger: ComponentLogger,
+        n_components: int,
+        filter_order: int,
+        standardize_features: bool,
+        step_size: float = 0.2,
+        max_iterations: int = 200,
     ) -> None:
         self.logger = logger
-        self.n_components = parameters.get("n_components")
-        self.filter_order = parameters.get("filter_order")
-        self.standardize_features = parameters.get("standardize_features")
-        self.step_size = parameters.get("step_size", 0.2)
-        self.max_iterations = parameters.get("max_iterations", 200)
+        self.n_components = n_components
+        self.filter_order = filter_order
+        self.standardize_features = standardize_features
+        self.step_size = step_size
+        self.max_iterations = max_iterations
         self.validate_parameters()
         self.scaler = StandardScaler(with_std=self.standardize_features)
         self.filters: np.ndarray | None = None
@@ -159,7 +166,7 @@ class ConvolutionalPCAModel(InductiveAnomalyModel):
         """Restore a trusted local filter artifact with the current logger."""
         with path.open("rb") as file:
             payload = pickle.load(file)
-        model = cls(payload["parameters"], logger)
+        model = cls(logger=logger, **payload["parameters"])
         model.scaler = payload["scaler"]
         model.filters = payload["filters"]
         model._diagnostics = payload["diagnostics"]

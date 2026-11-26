@@ -249,6 +249,22 @@ def test_rejects_invalid_parameter_candidates(candidates: object) -> None:
         experiment.validate_definition()
 
 
+@pytest.mark.parametrize(
+    "experiment_path",
+    sorted(Path("experiments").glob("*.yaml")),
+    ids=lambda path: path.stem,
+)
+def test_checked_in_candidates_construct_with_keyword_arguments(
+    experiment_path: Path,
+) -> None:
+    experiment = Experiment.from_path(
+        experiment_path,
+        Logger().for_component("mark_ad_benchmark.experiment"),
+    )
+    for parameters in experiment.model_parameter_candidates():
+        assert experiment.create_model(parameters).validate_parameters() is None
+
+
 def test_creditcard_tuning_candidates() -> None:
     logger = Logger().for_component("mark_ad_benchmark.experiment")
     fixed = Experiment.from_path(

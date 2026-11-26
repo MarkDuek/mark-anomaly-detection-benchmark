@@ -94,11 +94,9 @@ pickle.dump(
 ```python
 # 4. restore fitted pca state with the current process logger (documentation excerpt; keep synchronized)
 model = cls(
-    {
-        "n_components": payload["n_components"],
-        "standardize_features": payload["standardize_features"],
-    },
-    logger,
+    logger=logger,
+    n_components=payload["n_components"],
+    standardize_features=payload["standardize_features"],
 )
 model.feature_width = payload["feature_width"]
 model.pca = payload["pca"]
