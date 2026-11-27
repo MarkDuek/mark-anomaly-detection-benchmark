@@ -1,8 +1,0 @@
-#!/bin/sh
-
-if git diff --cached --quiet -- docs/published-runs.txt; then
-  exit 0
-fi
-
-make publish || exit 1
-git add -A docs/public/published-runs

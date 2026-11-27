@@ -7,7 +7,7 @@ UV := $(shell command -v uv 2>/dev/null || printf '%s' "$(HOME)/.local/bin/uv")
 help:
 	@printf '%s\n' \
 		'Available commands:' \
-		'  make setup                      Install uv if needed and synchronize dependencies.' \
+		'  make setup                      Install dependencies and pre-commit hooks.' \
 		'  make sync                       Synchronize dependencies.' \
 		'  make format                     Format Python code with Ruff.' \
 		'  make lint                       Lint Python code with Ruff.' \
@@ -28,7 +28,7 @@ setup:
 		curl -LsSf https://astral.sh/uv/install.sh | sh; \
 	fi
 	"$(UV)" sync --all-groups --locked
-	git config core.hooksPath .githooks
+	"$(UV)" run pre-commit install
 
 sync:
 	"$(UV)" sync --all-groups --locked

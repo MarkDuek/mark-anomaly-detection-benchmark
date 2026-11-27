@@ -1,0 +1,9 @@
+repos:
+  - repo: local
+    hooks:
+      - id: publish-runs
+        name: Package published runs
+        entry: make publish
+        language: system
+        files: ^docs/published-runs\.txt$
+        pass_filenames: false
