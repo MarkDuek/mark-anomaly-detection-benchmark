@@ -4,3 +4,5 @@ node_modules/
 runs.json
 public/run-curves/
 public/run-training/
+!public/published-runs/
+!public/published-runs/runs.json
