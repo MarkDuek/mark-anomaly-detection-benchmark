@@ -77,3 +77,15 @@ def test_cli_dispatches_visualization(monkeypatch: pytest.MonkeyPatch) -> None:
 
     assert len(calls) == 1
     assert isinstance(calls[0][0], ComponentLogger)
+
+
+def test_cli_dispatches_publication(monkeypatch: pytest.MonkeyPatch) -> None:
+    calls: list[tuple[object, ...]] = []
+    monkeypatch.setattr(
+        "mark_ad_benchmark.cli.publish_runs", lambda *args: calls.append(args)
+    )
+
+    cli.main(["publish"])
+
+    assert len(calls) == 1
+    assert isinstance(calls[0][0], ComponentLogger)

@@ -76,6 +76,14 @@ make visualize
 
 This writes `docs/public/runs.json`. The documentation site uses it for its run comparison and explorer pages.
 
+To publish selected local visualizations to GitHub Pages, add their test-run IDs to `docs/published-runs.txt` and run:
+
+```sh
+make publish
+```
+
+This copies the selected generated files to `docs/public/published-runs/`. Commit both that directory and `docs/published-runs.txt`; after running `make setup` once, the pre-commit hook runs `make publish` automatically whenever the list changes.
+
 For saved runs containing `training_history.json`, `make visualize` writes an interactive `training.html` beside that file and exposes it through an **Open training diagnostics** link in the run explorer. Historical MaxEnt-PCA runs can contain this history; new fits record only final diagnostics, not periodic monitoring or training charts.
 
 ## Quality Checks

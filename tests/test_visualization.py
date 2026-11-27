@@ -189,6 +189,57 @@ def test_visualization_exports_saved_test_run(
     assert not (tmp_path / "missing" / "runs.json").exists()
 
 
+def test_publish_packages_selected_generated_runs(tmp_path: Path) -> None:
+    source_root = tmp_path / "local"
+    curves_dir = source_root / "run-curves"
+    training_dir = source_root / "run-training"
+    curves_dir.mkdir(parents=True)
+    training_dir.mkdir()
+    runs = {
+        "published": {
+            "curves_url": "run-curves/published.json",
+            "training_url": "run-training/validated.html",
+        },
+        "private": {"curves_url": "run-curves/private.json"},
+    }
+    (source_root / "runs.json").write_text(json.dumps(runs))
+    (curves_dir / "published.json").write_text("published curves")
+    (curves_dir / "private.json").write_text("private curves")
+    (training_dir / "validated.html").write_text("training")
+    published_runs_path = tmp_path / "published-runs.txt"
+    published_runs_path.write_text("# Approved runs\npublished\n")
+    output_path = tmp_path / "published-runs"
+    output_path.mkdir()
+    (output_path / "stale.txt").write_text("stale")
+
+    result = timeseries.publish_runs(
+        Logger().for_component("mark_ad_benchmark.visualization.timeseries"),
+        published_runs_path,
+        source_root / "runs.json",
+        output_path,
+    )
+
+    assert result == output_path
+    assert json.loads((output_path / "runs.json").read_text()) == {
+        "published": runs["published"]
+    }
+    assert (output_path / "run-curves/published.json").read_text() == "published curves"
+    assert (output_path / "run-training/validated.html").read_text() == "training"
+    assert not (output_path / "run-curves/private.json").exists()
+    assert not (output_path / "stale.txt").exists()
+
+    published_runs_path.write_text("# No published runs\n")
+    empty_output_path = tmp_path / "empty-published-runs"
+    timeseries.publish_runs(
+        Logger().for_component("mark_ad_benchmark.visualization.timeseries"),
+        published_runs_path,
+        tmp_path / "missing.json",
+        empty_output_path,
+    )
+
+    assert json.loads((empty_output_path / "runs.json").read_text()) == {}
+
+
 def test_visualization_sampling_retains_anomalies(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

@@ -1,6 +1,6 @@
 .DEFAULT_GOAL := help
 
-.PHONY: help setup sync format lint test train evaluate run visualize ingest refine prepare ingest-all prepare-all
+.PHONY: help setup sync format lint test train evaluate run visualize publish ingest refine prepare ingest-all prepare-all
 
 UV := $(shell command -v uv 2>/dev/null || printf '%s' "$(HOME)/.local/bin/uv")
 
@@ -16,6 +16,7 @@ help:
 		'  make evaluate EXPERIMENT=<id> VALIDATED_RUN=<id> Test a saved validated artifact.' \
 		'  make run EXPERIMENT=<id>         Train then test an experiment.' \
 		'  make visualize                    Write an interactive test-run HTML dashboard.' \
+		'  make publish                      Package selected visualizations for GitHub Pages.' \
 		'  make ingest DATASET=<id>        Download and validate one raw dataset.' \
 		'  make refine DATASET=<id>        Validate and refine one local dataset.' \
 		'  make prepare DATASET=<id>       Ingest then refine one dataset.' \
@@ -27,6 +28,7 @@ setup:
 		curl -LsSf https://astral.sh/uv/install.sh | sh; \
 	fi
 	"$(UV)" sync --all-groups --locked
+	git config core.hooksPath .githooks
 
 sync:
 	"$(UV)" sync --all-groups --locked
@@ -51,6 +53,9 @@ evaluate:
 
 visualize:
 	PYTHONPATH=src uv run python main.py visualize
+
+publish:
+	PYTHONPATH=src uv run python main.py publish
 
 ingest:
 	PYTHONPATH=src uv run python main.py ingest $(DATASET)

@@ -85,6 +85,69 @@ def visualize_runs(
     return docs_output_path
 
 
+def publish_runs(
+    logger: ComponentLogger,
+    published_runs_path: Path = Path("docs/published-runs.txt"),
+    source_path: Path = Path("docs/public/runs.json"),
+    output_path: Path = Path("docs/public/published-runs"),
+) -> Path:
+    """Package selected existing visualization assets for the documentation site."""
+    run_ids = tuple(
+        line
+        for line in (
+            line.strip()
+            for line in published_runs_path.read_text(encoding="utf-8").splitlines()
+        )
+        if line and not line.startswith("#")
+    )
+    if len(run_ids) != len(set(run_ids)):
+        message = f"Duplicate run IDs in {published_runs_path}"
+        logger.error(message)
+        raise ValueError(message)
+    if run_ids and not source_path.is_file():
+        message = (
+            f"Visualization data not found: {source_path}; run make visualize first"
+        )
+        logger.error(message)
+        raise FileNotFoundError(message)
+    source_runs = json.loads(source_path.read_text(encoding="utf-8")) if run_ids else {}
+    missing_ids = [run_id for run_id in run_ids if run_id not in source_runs]
+    if missing_ids:
+        message = f"Published run not found in {source_path}: {missing_ids[0]}"
+        logger.error(message)
+        raise FileNotFoundError(message)
+    selected_runs = {run_id: source_runs[run_id] for run_id in run_ids}
+    source_root = source_path.parent
+    assets = [
+        source_root / asset_path
+        for run in selected_runs.values()
+        for asset_path in (
+            run["curves_url"],
+            *([run["training_url"]] if "training_url" in run else []),
+        )
+    ]
+    missing_assets = [path for path in assets if not path.is_file()]
+    if missing_assets:
+        message = f"Visualization asset not found: {missing_assets[0]}; run make visualize first"
+        logger.error(message)
+        raise FileNotFoundError(message)
+    temporary_path = output_path.with_name(f"{output_path.name}.tmp")
+    shutil.rmtree(temporary_path, ignore_errors=True)
+    temporary_path.mkdir(parents=True)
+    (temporary_path / "runs.json").write_text(
+        json.dumps(selected_runs, cls=PlotlyJSONEncoder), encoding="utf-8"
+    )
+    for asset in assets:
+        destination = temporary_path / asset.relative_to(source_root)
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(asset, destination)
+    shutil.rmtree(output_path, ignore_errors=True)
+    temporary_path.replace(output_path)
+    run_label = "run" if len(run_ids) == 1 else "runs"
+    logger.info(f"Published {len(run_ids)} {run_label}: {output_path}")
+    return output_path
+
+
 def load_run_curves(
     run_dir: Path, split: str, logger: ComponentLogger
 ) -> dict[str, object]:

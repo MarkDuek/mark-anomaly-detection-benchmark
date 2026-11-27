@@ -37,6 +37,7 @@
   const curvePlots = document.querySelector("#curve-plots");
   let runs = {};
   let curveRequest;
+  let assetRoot = "";
 
   const entries = (run) => Object.entries(run.metric_groups).flatMap(([group, metrics]) =>
     typeof metrics === "object" && metrics !== null
@@ -147,7 +148,7 @@
     curvePlots.hidden = true;
     curveStatus.textContent = "Loading curves…";
     try {
-      const response = await fetch(`${import.meta.env.BASE_URL}${run.curves_url}`, { signal: request.signal });
+      const response = await fetch(`${import.meta.env.BASE_URL}${assetRoot}${run.curves_url}`, { signal: request.signal });
       if (!response.ok) throw new Error(`HTTP ${response.status}`);
       const data = await response.json();
       if (request.signal.aborted) return;
@@ -196,7 +197,7 @@
   function renderRun() {
     const id = selector.value; const run = runs[id];
     document.querySelector("#training-link-container").hidden = !run.training_url;
-    document.querySelector("#training-link").href = run.training_url ? `${import.meta.env.BASE_URL}${run.training_url}` : "";
+    document.querySelector("#training-link").href = run.training_url ? `${import.meta.env.BASE_URL}${assetRoot}${run.training_url}` : "";
     document.querySelector("#experiment-id").textContent = run.display_name; document.querySelector("#run-id").textContent = `${run.run_time}  ${id}`;
     featureOptions.replaceChildren(...Object.keys(run.features).map((feature, index) => { const label = document.createElement("label"); label.innerHTML = `<input type="checkbox" value="${feature}" ${index < 4 ? "checked" : ""}><span>${rawFeatureName(run, feature)} <small>(${feature})</small></span>`; label.querySelector("input").addEventListener("change", () => renderPlot(run)); return label; }));
     renderMetrics(run); renderConfiguration(run); renderPlot(run); renderCurves(run);
@@ -204,5 +205,14 @@
 
   document.querySelector("#select-all").addEventListener("click", () => { featureOptions.querySelectorAll("input").forEach((input) => input.checked = true); renderPlot(runs[selector.value]); });
   document.querySelector("#clear-features").addEventListener("click", () => { featureOptions.querySelectorAll("input").forEach((input) => input.checked = false); renderPlot(runs[selector.value]); });
-  fetch(`${import.meta.env.BASE_URL}runs.json`).then((response) => response.ok ? response.json() : Promise.reject()).then((data) => { runs = data; selector.replaceChildren(...Object.entries(runs).map(([id, run]) => new Option(`${run.display_name} — ${run.run_time}`, id))); const requested = new URLSearchParams(window.location.search).get("run"); if (requested in runs) selector.value = requested; selector.addEventListener("change", renderRun); status.hidden = true; selectedRun.hidden = false; renderRun(); }).catch(() => { status.textContent = "No generated run data is available. Run `make visualize` after creating test artifacts."; });
+  async function loadRuns() {
+    for (const root of ["", "published-runs/"]) {
+      const response = await fetch(`${import.meta.env.BASE_URL}${root}runs.json`);
+      if (!response.ok) continue;
+      const data = await response.json();
+      if (Object.keys(data).length) { assetRoot = root; return data; }
+    }
+    throw new Error("No run data");
+  }
+  loadRuns().then((data) => { runs = data; selector.replaceChildren(...Object.entries(runs).map(([id, run]) => new Option(`${run.display_name} — ${run.run_time}`, id))); const requested = new URLSearchParams(window.location.search).get("run"); if (requested in runs) selector.value = requested; selector.addEventListener("change", renderRun); status.hidden = true; selectedRun.hidden = false; renderRun(); }).catch(() => { status.textContent = "No generated or published run data is available."; });
 </script>

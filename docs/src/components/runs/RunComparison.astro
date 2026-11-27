@@ -49,6 +49,7 @@
   let sortColumn = null;
   let sortDirection = 1;
   let curveRequest;
+  let assetRoot = "";
   const columns = {
     overview: ["point.f1", "event.f1", "range.f1", "affiliation.f1", "ranking.auc_roc", "vus_ranking.auc_roc"],
     point: ["point.precision", "point.recall", "point.f1"],
@@ -120,7 +121,7 @@
     curveStatus.textContent = "Loading test curves…";
     try {
       const curves = await Promise.all(ids.map(async (id) => {
-        const response = await fetch(`${import.meta.env.BASE_URL}${runs[id].curves_url}`, { signal: request.signal });
+        const response = await fetch(`${import.meta.env.BASE_URL}${assetRoot}${runs[id].curves_url}`, { signal: request.signal });
         if (!response.ok) throw new Error(`HTTP ${response.status}`);
         return (await response.json()).test;
       }));
@@ -169,12 +170,21 @@
   selectAllRuns.addEventListener("click", () => { options.querySelectorAll("input").forEach((input) => input.checked = true); refreshSelection(); });
   clearRuns.addEventListener("click", () => { options.querySelectorAll("input").forEach((input) => input.checked = false); refreshSelection(); });
   metricFamily.addEventListener("change", render);
-  fetch(`${import.meta.env.BASE_URL}runs.json`).then((response) => response.ok ? response.json() : Promise.reject()).then((data) => {
+  async function loadRuns() {
+    for (const root of ["", "published-runs/"]) {
+      const response = await fetch(`${import.meta.env.BASE_URL}${root}runs.json`);
+      if (!response.ok) continue;
+      const data = await response.json();
+      if (Object.keys(data).length) { assetRoot = root; return data; }
+    }
+    throw new Error("No run data");
+  }
+  loadRuns().then((data) => {
     runs = data;
     const datasets = [...new Set(Object.values(runs).map((run) => run.dataset_id))];
     datasetSelector.replaceChildren(...datasets.map((dataset) => new Option(formatDataset(dataset), dataset)));
     const requestedDataset = new URLSearchParams(window.location.search).get("dataset");
     if (datasets.includes(requestedDataset)) datasetSelector.value = requestedDataset;
     datasetSelector.addEventListener("change", renderOptions); status.hidden = true; renderOptions();
-  }).catch(() => { status.textContent = "No generated run data is available. Run `make visualize` after creating test artifacts."; });
+  }).catch(() => { status.textContent = "No generated or published run data is available."; });
 </script>
