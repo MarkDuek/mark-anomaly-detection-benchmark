@@ -1,0 +1,18 @@
+id: smd-machine-1-2-convolutional_pca-validation_f1
+dataset: smd-machine-1-2
+model:
+  name: convolutional_pca
+  candidates:
+    n_components: [1, 5, 10, 20, 30, 37]
+    filter_order: [0, 1, 3, 5]
+    standardize_features: [false, true]
+    step_size: [0.1, 0.2]
+    max_iterations: [1000]
+protocol: inductive
+training:
+  epochs: 1
+threshold:
+  name: validation_f1
+selection:
+  metric: f1
+  direction: maximize

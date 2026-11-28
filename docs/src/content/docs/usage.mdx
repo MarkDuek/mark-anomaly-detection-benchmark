@@ -49,13 +49,13 @@ Raw and refined files are local artifacts under `data/raw/` and `data/refined/`;
 Experiment definitions in `experiments/` select a dataset, model, protocol, threshold selector, parameter candidates, and metric settings.
 
 ```sh
-make train EXPERIMENT=calit2-pca-inductive
+make train EXPERIMENT=calit2/pca-validation_f1
 ```
 
 Training evaluates every configured parameter candidate on validation data, selects a threshold from validation scores, and creates a validated run artifact.
 
 ```sh
-make evaluate EXPERIMENT=calit2-pca-inductive VALIDATED_RUN=<validated-run-id>
+make evaluate EXPERIMENT=calit2/pca-validation_f1 VALIDATED_RUN=<validated-run-id>
 ```
 
 Testing applies the selector calibration without using test labels. Fixed selectors reuse their numeric validation threshold, while adaptive selectors derive a test threshold from persisted validation calibration and test scores. Inductive models restore the selected fitted model; transductive models instantiate a new model and fit/score the complete test feature batch according to their protocol.
@@ -63,7 +63,7 @@ Testing applies the selector calibration without using test labels. Fixed select
 Run both phases together:
 
 ```sh
-make run EXPERIMENT=calit2-pca-inductive
+make run EXPERIMENT=calit2/pca-validation_f1
 ```
 
 ## Visualize Runs

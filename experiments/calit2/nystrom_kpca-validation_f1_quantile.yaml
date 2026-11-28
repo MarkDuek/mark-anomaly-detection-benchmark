@@ -1,0 +1,19 @@
+id: calit2-nystrom_kpca-validation_f1_quantile
+dataset: calit2
+model:
+  name: nystrom_kpca
+  candidates:
+    n_components: [1]
+    n_landmarks: [16, 32, 64]
+    kernel: [linear, poly, rbf]
+    standardize_features: [false, true]
+    random_state: [42]
+    eigenvalue_tol_mode: [relative]
+protocol: inductive
+training:
+  epochs: 1
+threshold:
+  name: validation_f1_quantile
+selection:
+  metric: f1
+  direction: maximize

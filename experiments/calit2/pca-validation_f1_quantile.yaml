@@ -1,0 +1,15 @@
+id: calit2-pca-validation_f1_quantile
+dataset: calit2
+model:
+  name: pca
+  candidates:
+    n_components: [1]
+    standardize_features: [false, true]
+protocol: inductive
+training:
+  epochs: 1
+threshold:
+  name: validation_f1_quantile
+selection:
+  metric: f1
+  direction: maximize

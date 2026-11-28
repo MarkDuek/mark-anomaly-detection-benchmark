@@ -1,0 +1,22 @@
+id: calit2-maxent_pca-validation_f1
+dataset: calit2
+model:
+  name: maxent_pca
+  candidates:
+    n_components: [1]
+    standardize_features: [false, true]
+    bandwidth_scale: [1.0, 2.0, 4.0]
+    pair_batch_size: [1024]
+    max_iterations: [1000]
+    random_state: [42]
+    optimizer:
+    - name: sgd
+      learning_rate: 0.1
+protocol: inductive
+training:
+  epochs: 1
+threshold:
+  name: validation_f1
+selection:
+  metric: f1
+  direction: maximize

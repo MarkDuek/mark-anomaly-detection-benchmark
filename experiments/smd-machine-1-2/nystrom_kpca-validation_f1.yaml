@@ -1,0 +1,19 @@
+id: smd-machine-1-2-nystrom_kpca-validation_f1
+dataset: smd-machine-1-2
+model:
+  name: nystrom_kpca
+  candidates:
+    n_components: [1, 5, 10, 20, 30, 37]
+    n_landmarks: [64, 128, 256]
+    kernel: [linear, poly, rbf]
+    standardize_features: [false, true]
+    random_state: [42]
+    eigenvalue_tol_mode: [relative]
+protocol: inductive
+training:
+  epochs: 1
+threshold:
+  name: validation_f1
+selection:
+  metric: f1
+  direction: maximize

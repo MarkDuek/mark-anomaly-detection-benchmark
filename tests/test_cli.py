@@ -58,12 +58,12 @@ def test_cli_dispatches_training_and_testing(
 
     monkeypatch.setattr("mark_ad_benchmark.cli.Experiment", FakeExperiment)
 
-    cli.main(["train", "calit2-pca-inductive"])
-    cli.main(["test", "calit2-pca-inductive", "training-run"])
+    cli.main(["train", "calit2/pca-validation_f1"])
+    cli.main(["test", "calit2/pca-validation_f1", "training-run"])
 
-    assert calls[0][0] == Path("experiments/calit2-pca-inductive.yaml")
+    assert calls[0][0] == Path("experiments/calit2/pca-validation_f1.yaml")
     assert calls[1] == ("train",)
-    assert calls[2][0] == Path("experiments/calit2-pca-inductive.yaml")
+    assert calls[2][0] == Path("experiments/calit2/pca-validation_f1.yaml")
     assert calls[3] == ("test", "training-run")
 
 

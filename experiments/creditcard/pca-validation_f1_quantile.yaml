@@ -1,0 +1,15 @@
+id: creditcard-pca-validation_f1_quantile
+dataset: creditcard
+model:
+  name: pca
+  candidates:
+    n_components: [1, 5, 13, 20, 26, 28]
+    standardize_features: [false, true]
+protocol: inductive
+training:
+  epochs: 1
+threshold:
+  name: validation_f1_quantile
+selection:
+  metric: f1
+  direction: maximize

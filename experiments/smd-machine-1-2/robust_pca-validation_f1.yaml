@@ -1,0 +1,16 @@
+id: smd-machine-1-2-robust_pca-validation_f1
+dataset: smd-machine-1-2
+model:
+  name: robust_pca
+  candidates:
+    lambda: [0.001, 0.004, 0.01, 0.025, 0.05]
+    tolerance: [1.0e-5]
+    max_iterations: [5000]
+protocol: transductive
+training:
+  epochs: 1
+threshold:
+  name: validation_f1
+selection:
+  metric: f1
+  direction: maximize

@@ -1,0 +1,16 @@
+id: calit2-kernel_pca-validation_f1_quantile
+dataset: calit2
+model:
+  name: kernel_pca
+  candidates:
+    n_components: [1]
+    standardize_features: [false, true]
+    kernel: [linear, poly, rbf]
+protocol: inductive
+training:
+  epochs: 1
+threshold:
+  name: validation_f1_quantile
+selection:
+  metric: f1
+  direction: maximize

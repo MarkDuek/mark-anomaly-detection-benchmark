@@ -1,0 +1,19 @@
+id: creditcard-nystrom_kpca-validation_f1_quantile
+dataset: creditcard
+model:
+  name: nystrom_kpca
+  candidates:
+    n_components: [1, 5, 13, 20, 26, 28]
+    n_landmarks: [32, 64, 128]
+    kernel: [linear, poly, rbf]
+    standardize_features: [false, true]
+    random_state: [42]
+    eigenvalue_tol_mode: [relative]
+protocol: inductive
+training:
+  epochs: 1
+threshold:
+  name: validation_f1_quantile
+selection:
+  metric: f1
+  direction: maximize

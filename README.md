@@ -77,7 +77,7 @@ make prepare DATASET=calit2
 ### Run an Experiment
 
 ```sh
-make run EXPERIMENT=calit2-pca-inductive
+make run EXPERIMENT=calit2/pca-validation_f1
 make visualize
 ```
 

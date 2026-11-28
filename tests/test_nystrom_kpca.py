@@ -272,14 +272,14 @@ def test_invalid_features_and_kernel_parameters() -> None:
 
 def test_checked_in_calit2_experiment_configuration() -> None:
     experiment = Experiment.from_path(
-        Path("experiments/calit2-nystrom-kpca-inductive.yaml"),
+        Path("experiments/calit2/nystrom_kpca-validation_f1.yaml"),
         Logger().for_component("mark_ad_benchmark.experiment"),
     )
-    model = experiment.create_model()
+    model = experiment.create_model(experiment.model_parameter_candidates()[0])
     assert isinstance(model, NystromKPCAModel)
     assert experiment.execution_mode == "inductive"
-    assert model.estimator.n_landmarks == 100
-    assert model.estimator.kernel_params == {"gamma": 0.5}
+    assert model.estimator.n_landmarks == 16
+    assert model.estimator.kernel == "linear"
 
 
 def test_benchmark_train_and_test_with_saved_model(tmp_path: Path) -> None:

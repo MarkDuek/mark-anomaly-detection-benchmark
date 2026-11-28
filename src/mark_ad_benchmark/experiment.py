@@ -438,8 +438,10 @@ class Experiment:
             self.logger.error(message)
             raise TypeError(message)
         model = self.definition.get("model")
-        if not isinstance(model, dict) or not isinstance(model.get("parameters"), dict):
-            message = "Experiment model.parameters must be a mapping"
+        if not isinstance(model, dict) or not isinstance(
+            model.get("parameters", {}), dict
+        ):
+            message = "Experiment model.parameters must be a mapping when provided"
             self.logger.error(message)
             raise TypeError(message)
         candidates = model.get("candidates", {})
@@ -509,7 +511,9 @@ class Experiment:
     def create_model(self, parameters: dict[str, object] | None = None) -> object:
         """Instantiate the configured model with a component-scoped logger."""
         parameters = (
-            self.definition["model"]["parameters"] if parameters is None else parameters
+            self.definition["model"].get("parameters", {})
+            if parameters is None
+            else parameters
         )
         logger = self.logger.for_component(self.model_module)
         if "lambda" in parameters:
@@ -522,7 +526,7 @@ class Experiment:
     def model_parameter_candidates(self) -> tuple[dict[str, object], ...]:
         """Expand a parameter grid or merge explicit candidates with base parameters."""
         model = self.definition["model"]
-        parameters = model["parameters"]
+        parameters = model.get("parameters", {})
         candidates = model.get("candidates", {})
         if not candidates:
             return (dict(parameters),)
@@ -535,10 +539,12 @@ class Experiment:
         )
 
     def metric_settings(self) -> MetricSettings:
-        """Read explicit range-metric settings from the experiment definition."""
+        """Read global metric settings, allowing an experiment override."""
         metrics = self.definition.get("metrics")
+        if metrics is None:
+            metrics = yaml.safe_load((self.config_root / "metrics.yaml").read_text())
         if not isinstance(metrics, dict):
-            message = "Experiment metrics must be a mapping"
+            message = "Metric settings must be a mapping"
             self.logger.error(message)
             raise TypeError(message)
         vus = metrics.get("vus")

@@ -180,41 +180,13 @@ def test_save_and_load_preserves_scores_and_diagnostics(tmp_path: Path) -> None:
 
 
 @pytest.mark.parametrize(
-    ("experiment_id", "orders", "budgets", "components", "standardize"),
+    "experiment_id",
     [
-        (
-            "creditcard-convolutional-pca-inductive-validation-f1-quantile",
-            (0, 1, 3, 10),
-            (200, 200, 200, 200),
-            13,
-            False,
-        ),
-        (
-            "creditcard-convolutional-pca-order0-optimization",
-            (0, 0, 0),
-            (200, 1000, 5000),
-            25,
-            True,
-        ),
-        (
-            "creditcard-convolutional-pca-filter-orders",
-            (0, 1, 3, 5, 10),
-            (1000, 1000, 1000, 1000, 1000),
-            25,
-            True,
-        ),
-        (
-            "creditcard-convolutional-pca-higher-order-optimization",
-            (3, 5, 10),
-            (5000, 5000, 5000),
-            25,
-            True,
-        ),
+        "creditcard/convolutional_pca-validation_f1",
+        "creditcard/convolutional_pca-validation_f1_quantile",
     ],
 )
-def test_checked_in_experiment_resolves_candidates(
-    experiment_id, orders, budgets, components, standardize
-) -> None:
+def test_checked_in_experiment_resolves_candidates(experiment_id: str) -> None:
     experiment = Experiment.from_path(
         Path(f"experiments/{experiment_id}.yaml"),
         Logger().for_component("mark_ad_benchmark.experiment"),
@@ -224,40 +196,11 @@ def test_checked_in_experiment_resolves_candidates(
         for parameters in experiment.model_parameter_candidates()
     )
 
-    assert tuple(candidate.filter_order for candidate in models) == orders
-    assert tuple(candidate.max_iterations for candidate in models) == budgets
-    assert all(
-        candidate.n_components == components
-        and candidate.standardize_features is standardize
-        and candidate.step_size == 0.2
-        for candidate in models
-    )
-
-
-@pytest.mark.parametrize(
-    ("experiment_id", "orders", "max_iterations"),
-    [
-        ("creditcard-convolutional-pca-order1-components", (1,), 5000),
-        ("creditcard-convolutional-pca-orders2-3-components", (2, 3), 5000),
-        ("creditcard-convolutional-pca-order3-components-10000", (3,), 10000),
-    ],
-)
-def test_component_sweep_candidates(experiment_id, orders, max_iterations) -> None:
-    experiment = Experiment.from_path(
-        Path(f"experiments/{experiment_id}.yaml"),
-        Logger().for_component("mark_ad_benchmark.experiment"),
-    )
-    candidates = experiment.model_parameter_candidates()
-    assert [
-        (candidate["filter_order"], candidate["n_components"])
-        for candidate in candidates
-    ] == [(order, components) for order in orders for components in range(1, 29)]
-    for parameters in candidates:
-        candidate = experiment.create_model(parameters)
-        assert candidate.filter_order in orders
-        assert candidate.standardize_features is True
-        assert candidate.step_size == 0.2
-        assert candidate.max_iterations == max_iterations
+    assert {candidate.filter_order for candidate in models} == {0, 1, 3, 5}
+    assert {candidate.n_components for candidate in models} == {1, 5, 13, 20, 26, 28}
+    assert {candidate.standardize_features for candidate in models} == {False, True}
+    assert {candidate.step_size for candidate in models} == {0.1, 0.2}
+    assert all(candidate.max_iterations == 1000 for candidate in models)
 
 
 def test_constant_training_data_has_zero_reconstruction_error() -> None:

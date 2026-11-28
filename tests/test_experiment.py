@@ -210,11 +210,17 @@ def test_experiment_rejects_unknown_model_or_protocol_before_loading_data(
 
 def test_explicit_parameter_candidates_override_base_parameters() -> None:
     experiment = Experiment.from_path(
-        Path("experiments/calit2-kernel-pca-inductive.yaml"),
+        Path("experiments/calit2/kernel_pca-validation_f1.yaml"),
         Logger().for_component("mark_ad_benchmark.experiment"),
     )
+    experiment.definition["model"]["parameters"] = {
+        "n_components": 1,
+        "standardize_features": True,
+        "kernel": "rbf",
+        "kernel_parameters": {"gamma": 1.0},
+    }
     experiment.definition["model"]["candidates"] = [
-        {"kernel": "linear", "n_components": 2},
+        {"kernel": "linear", "kernel_parameters": {}, "n_components": 2},
         {"kernel": "rbf", "kernel_parameters": {"gamma": 0.5}},
     ]
     experiment.validate_definition()
@@ -240,7 +246,7 @@ def test_explicit_parameter_candidates_override_base_parameters() -> None:
 )
 def test_rejects_invalid_parameter_candidates(candidates: object) -> None:
     experiment = Experiment.from_path(
-        Path("experiments/calit2-kernel-pca-inductive.yaml"),
+        Path("experiments/calit2/kernel_pca-validation_f1.yaml"),
         Logger().for_component("mark_ad_benchmark.experiment"),
     )
     experiment.definition["model"]["candidates"] = candidates
@@ -251,7 +257,7 @@ def test_rejects_invalid_parameter_candidates(candidates: object) -> None:
 
 @pytest.mark.parametrize(
     "experiment_path",
-    sorted(Path("experiments").glob("*.yaml")),
+    sorted(Path("experiments").rglob("*.yaml")),
     ids=lambda path: path.stem,
 )
 def test_checked_in_candidates_construct_with_keyword_arguments(
@@ -265,13 +271,13 @@ def test_checked_in_candidates_construct_with_keyword_arguments(
         assert experiment.create_model(parameters).validate_parameters() is None
 
 
-def test_creditcard_tuning_candidates() -> None:
+def test_threshold_variants_share_creditcard_pca_sweep() -> None:
     logger = Logger().for_component("mark_ad_benchmark.experiment")
     fixed = Experiment.from_path(
-        Path("experiments/creditcard-pca-inductive-validation-f1.yaml"), logger
+        Path("experiments/creditcard/pca-validation_f1.yaml"), logger
     )
     quantile = Experiment.from_path(
-        Path("experiments/creditcard-pca-inductive-validation-f1-quantile.yaml"),
+        Path("experiments/creditcard/pca-validation_f1_quantile.yaml"),
         logger,
     )
     assert {
@@ -282,49 +288,7 @@ def test_creditcard_tuning_candidates() -> None:
     } == quantile.definition
     assert [
         candidate["n_components"] for candidate in fixed.model_parameter_candidates()
-    ] == [
-        13,
-        20,
-        26,
-    ]
-    candidates = quantile.model_parameter_candidates()
-    assert [candidate["n_components"] for candidate in candidates] == list(range(1, 29))
-    for candidate in candidates:
-        assert candidate["standardize_features"] is True
-        quantile.create_model(candidate)
-
-    nystrom = Experiment.from_path(
-        Path(
-            "experiments/creditcard-nystrom-kpca-inductive-kernels-validation-f1-quantile.yaml"
-        ),
-        logger,
-    )
-    candidates = nystrom.model_parameter_candidates()
-    assert {
-        kernel: [
-            candidate["n_components"]
-            for candidate in candidates
-            if candidate["kernel"] == kernel
-        ]
-        for kernel in ("linear", "poly", "rbf")
-    } == {
-        "linear": [5, 13, 20, 26],
-        "poly": [5, 13, 20, 26],
-        "rbf": [5, 13, 20, 26, 32, 48],
-    }
-    for candidate in candidates:
-        nystrom.create_model(candidate)
-
-    maxent = Experiment.from_path(
-        Path("experiments/creditcard-maxent-pca-inductive-validation-f1-quantile.yaml"),
-        logger,
-    )
-    candidates = maxent.model_parameter_candidates()
-    assert [candidate["n_components"] for candidate in candidates] == list(range(1, 29))
-    for candidate in candidates:
-        assert candidate["standardize_features"] is True
-        assert candidate["optimizer"] == {"name": "sgd", "learning_rate": 1.0}
-        maxent.create_model(candidate)
+    ] == [1, 1, 5, 5, 13, 13, 20, 20, 26, 26, 28, 28]
 
 
 def write_split(path: Path, rows: tuple[tuple[int, int, int], ...]) -> None:

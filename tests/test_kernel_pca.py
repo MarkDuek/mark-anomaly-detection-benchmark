@@ -305,7 +305,7 @@ def test_unfitted_model_cannot_score_or_save(tmp_path: Path) -> None:
 
 def test_checked_in_experiment_resolves_all_three_kernel_candidates() -> None:
     experiment = Experiment.from_path(
-        Path("experiments/calit2-kernel-pca-inductive.yaml"),
+        Path("experiments/calit2/kernel_pca-validation_f1.yaml"),
         Logger().for_component("mark_ad_benchmark.experiment"),
     )
     models = tuple(
@@ -313,11 +313,6 @@ def test_checked_in_experiment_resolves_all_three_kernel_candidates() -> None:
         for parameters in experiment.model_parameter_candidates()
     )
 
-    assert tuple(candidate.kernel for candidate in models) == tuple(KernelType)
-    assert tuple(candidate.kernel_parameters for candidate in models) == (
-        {},
-        {"gamma": 1.0, "degree": 2, "coef0": 1.0},
-        {"gamma": 1.0},
-    )
+    assert {candidate.kernel for candidate in models} == set(KernelType)
     assert all(isinstance(candidate, KernelPCAModel) for candidate in models)
     assert experiment.execution_mode == "inductive"
